@@ -1,6 +1,11 @@
 {
   "type": "module",
   "scripts": {
+    "start": "node server.js",
     "test": "node app.test.mjs"
+  },
+  "dependencies": {
+    "express": "^4.22.1",
+    "socket.io": "^4.8.3"
   }
 }

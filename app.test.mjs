@@ -6,7 +6,8 @@ import {
   isDraw,
   isValidSettings,
   placeMark,
-} from "./app.js";
+} from "./game-logic.js";
+import { createRoomStore } from "./room-state.js";
 
 let passed = 0;
 let failed = 0;
@@ -173,6 +174,63 @@ test("detects a draw when every cell is filled without a winner", () => {
 
   assert.equal(isDraw(board, 9), true);
   assert.equal(isDraw(board, 8), false);
+});
+
+// ── Online room state ────────────────────────────────────────────────────────
+
+test("creates a room, starts both players on join, and rejects a third player", () => {
+  const rooms = createRoomStore({ generateCode: () => "abc123" });
+
+  const created = rooms.createRoom({ socketId: "socket-a", size: 3, winLength: 3 });
+  assert.equal(created.ok, true);
+  assert.equal(created.code, "ABC123");
+
+  const joined = rooms.joinRoom({ socketId: "socket-b", code: "abc123" });
+  assert.equal(joined.ok, true);
+  assert.deepEqual(joined.players, [
+    { socketId: "socket-a", player: "X" },
+    { socketId: "socket-b", player: "O" },
+  ]);
+  assert.equal(joined.room.board.length, 3);
+
+  assert.deepEqual(rooms.joinRoom({ socketId: "socket-c", code: "ABC123" }), {
+    ok: false,
+    message: "Room is full.",
+  });
+});
+
+test("validates turns and returns winner updates after online moves", () => {
+  const rooms = createRoomStore({ generateCode: () => "WIN001" });
+  rooms.createRoom({ socketId: "x-player", size: 3, winLength: 3 });
+  rooms.joinRoom({ socketId: "o-player", code: "WIN001" });
+
+  assert.deepEqual(rooms.makeMove({ socketId: "o-player", row: 0, col: 0 }), {
+    ok: false,
+    message: "Not your turn.",
+  });
+
+  assert.equal(rooms.makeMove({ socketId: "x-player", row: 0, col: 0 }).ok, true);
+  assert.equal(rooms.makeMove({ socketId: "o-player", row: 1, col: 0 }).ok, true);
+  assert.equal(rooms.makeMove({ socketId: "x-player", row: 0, col: 1 }).ok, true);
+  assert.equal(rooms.makeMove({ socketId: "o-player", row: 1, col: 1 }).ok, true);
+  const winningMove = rooms.makeMove({ socketId: "x-player", row: 0, col: 2 });
+
+  assert.equal(winningMove.ok, true);
+  assert.deepEqual(winningMove.update, {
+    board: [
+      ["X", "X", "X"],
+      ["O", "O", ""],
+      ["", "", ""],
+    ],
+    currentPlayer: "X",
+    winner: "X",
+    winningCells: [
+      [0, 2],
+      [0, 1],
+      [0, 0],
+    ],
+    movesPlayed: 5,
+  });
 });
 
 // ── Summary ───────────────────────────────────────────────────────────────────

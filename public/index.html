@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Tic Tac Toe</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="game-shell">
+      <section class="intro" aria-labelledby="game-title">
+        <h1 id="game-title">Tic Tac Toe</h1>
+        <p class="lead">
+          First to get N in a row wins. Horizontal, vertical, or diagonal.
+        </p>
+      </section>
+
+      <div class="mode-toggle" role="group" aria-label="Game mode">
+        <button class="mode-btn active" id="btn-mode-local" type="button">
+          Local
+        </button>
+        <button class="mode-btn" id="btn-mode-online" type="button">
+          Online
+        </button>
+      </div>
+
+      <div id="local-mode">
+        <form class="controls" id="settings-form">
+          <label for="board-size">
+            Board size
+            <input
+              id="board-size"
+              name="board-size"
+              type="number"
+              min="3"
+              max="20"
+              value="10"
+              inputmode="numeric"
+            />
+          </label>
+          <label for="win-length">
+            In a row to win
+            <input
+              id="win-length"
+              name="win-length"
+              type="number"
+              min="3"
+              value="5"
+              inputmode="numeric"
+            />
+          </label>
+          <button type="submit">New Game</button>
+        </form>
+
+        <div class="scoreboard" aria-label="Score">
+          <div class="score-card player-x" id="score-card-x">
+            <span class="player-label">Player X</span>
+            <span class="score" id="score-x">0</span>
+          </div>
+          <div class="score-divider">vs</div>
+          <div class="score-card player-o" id="score-card-o">
+            <span class="player-label">Player O</span>
+            <span class="score" id="score-o">0</span>
+          </div>
+        </div>
+
+        <p
+          class="status"
+          id="local-status"
+          role="status"
+          aria-live="polite"
+        ></p>
+
+        <section class="board-wrap" aria-label="Game board">
+          <div class="board" id="local-board"></div>
+        </section>
+      </div>
+
+      <div id="online-mode" hidden>
+        <div id="online-lobby">
+          <div class="lobby-section">
+            <h2 class="lobby-heading">Create a room</h2>
+            <form class="controls" id="online-settings-form">
+              <label for="online-board-size">
+                Board size
+                <input
+                  id="online-board-size"
+                  type="number"
+                  min="3"
+                  max="20"
+                  value="10"
+                  inputmode="numeric"
+                />
+              </label>
+              <label for="online-win-length">
+                In a row to win
+                <input
+                  id="online-win-length"
+                  type="number"
+                  min="3"
+                  value="5"
+                  inputmode="numeric"
+                />
+              </label>
+              <button type="submit">Create Room</button>
+            </form>
+            <div id="room-created-info" hidden>
+              <p class="lobby-waiting">Share this code with your opponent:</p>
+              <p class="room-code" id="room-code-display"></p>
+              <p class="lobby-waiting">Waiting for opponent to join...</p>
+            </div>
+          </div>
+
+          <div class="lobby-divider">or</div>
+
+          <div class="lobby-section">
+            <h2 class="lobby-heading">Join a room</h2>
+            <form class="join-form" id="join-form">
+              <input
+                id="join-code-input"
+                type="text"
+                maxlength="6"
+                placeholder="Enter room code"
+                autocomplete="off"
+                spellcheck="false"
+              />
+              <button type="submit">Join</button>
+            </form>
+          </div>
+
+          <p
+            class="status"
+            id="lobby-status"
+            role="status"
+            aria-live="polite"
+          ></p>
+        </div>
+
+        <div id="online-game" hidden>
+          <div class="online-player-badge" id="online-player-badge"></div>
+          <p
+            class="status"
+            id="online-status"
+            role="status"
+            aria-live="polite"
+          ></p>
+          <section class="board-wrap" aria-label="Game board">
+            <div class="board" id="online-board"></div>
+          </section>
+          <button class="leave-btn" id="btn-leave" type="button">
+            Leave game
+          </button>
+        </div>
+      </div>
+    </main>
+
+    <script type="module" src="app.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script type="module" src="client.js"></script>
+  </body>
+</html>

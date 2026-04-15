@@ -33,16 +33,16 @@ const elements =
   typeof document === "undefined"
     ? null
     : {
-        form: document.querySelector("#settings-form"),
-        board: document.querySelector("#board"),
-        status: document.querySelector("#status"),
-        sizeInput: document.querySelector("#board-size"),
-        winInput: document.querySelector("#win-length"),
-        scoreX: document.querySelector("#score-x"),
-        scoreO: document.querySelector("#score-o"),
-        scoreCardX: document.querySelector("#score-card-x"),
-        scoreCardO: document.querySelector("#score-card-o"),
-      };
+      form: document.querySelector("#settings-form"),
+      board: document.querySelector("#local-board"),
+      status: document.querySelector("#local-status"),
+      sizeInput: document.querySelector("#board-size"),
+      winInput: document.querySelector("#win-length"),
+      scoreX: document.querySelector("#score-x"),
+      scoreO: document.querySelector("#score-o"),
+      scoreCardX: document.querySelector("#score-card-x"),
+      scoreCardO: document.querySelector("#score-card-o"),
+    };
 
 export function createEmptyBoard(size) {
   return Array.from({ length: size }, () => Array.from({ length: size }, () => ""));
