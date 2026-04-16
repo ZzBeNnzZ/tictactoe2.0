@@ -1,4 +1,4 @@
-# Adjustable Tic Tac Toe
+# Tic Tac Toe 2.0
 
 A browser-based tic tac toe game with configurable board size, configurable win length, local play, and real-time online multiplayer rooms.
 
