@@ -104,7 +104,9 @@
           class="leaderboard-section"
           aria-labelledby="local-stats-heading"
         >
-          <h2 id="local-stats-heading">This Browser Stats</h2>
+          <div class="leaderboard-header">
+            <h2 id="local-stats-heading">🏆 High Scores</h2>
+          </div>
           <div class="leaderboard-list" id="local-stats-list"></div>
         </section>
       </div>
@@ -220,15 +222,17 @@
           class="leaderboard-section"
           aria-labelledby="online-leaderboard-heading"
         >
-          <h2 id="online-leaderboard-heading">Online Leaderboard</h2>
+          <div class="leaderboard-header">
+            <h2 id="online-leaderboard-heading">🏆 Leaderboard</h2>
+            <button
+              class="secondary-btn"
+              id="btn-refresh-leaderboard"
+              type="button"
+            >
+              Refresh
+            </button>
+          </div>
           <div class="leaderboard-list" id="online-leaderboard-list"></div>
-          <button
-            class="secondary-btn"
-            id="btn-refresh-leaderboard"
-            type="button"
-          >
-            Refresh leaderboard
-          </button>
         </section>
       </div>
       </div><!-- /.mode-panels -->

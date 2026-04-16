@@ -395,14 +395,23 @@ function renderLocalStats() {
     return;
   }
 
+  const medals = ["🥇", "🥈", "🥉"];
   elements.localStatsList.innerHTML = rows
     .map(
-      (row, index) => `
+      (row, index) => {
+        const rank = index < 3 ? medals[index] : `${index + 1}`;
+        return `
         <div class="leaderboard-row" style="--i: ${index}">
-          <span>${index + 1}. ${row.username}</span>
-          <span>${row.wins}W ${row.losses}L ${row.draws}D</span>
+          <span class="leaderboard-rank">${rank}</span>
+          <span class="leaderboard-username">${row.username}</span>
+          <span class="leaderboard-stats">
+            <span class="leaderboard-stat-w">${row.wins}W</span>
+            <span class="leaderboard-stat-l">${row.losses}L</span>
+            <span class="leaderboard-stat-d">${row.draws}D</span>
+          </span>
         </div>
-      `,
+      `;
+      },
     )
     .join("");
 }

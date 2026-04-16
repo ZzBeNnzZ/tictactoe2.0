@@ -405,14 +405,24 @@ function renderOnlineLeaderboard(players) {
     return;
   }
 
+  const medals = ["🥇", "🥈", "🥉"];
+  const me = getCurrentUsername();
+
   elOnlineLeaderboard.innerHTML = players
-    .map(
-      (player, index) => `
-        <div class="leaderboard-row" style="--i: ${index}">
-          <span>${index + 1}. ${player.username}</span>
-          <span>${player.wins}W ${player.losses}L ${player.draws}D</span>
+    .map((player, index) => {
+      const rank = index < 3 ? medals[index] : `${index + 1}`;
+      const isMe = me && player.username === me;
+      return `
+        <div class="leaderboard-row${isMe ? " leaderboard-row--me" : ""}" style="--i: ${index}">
+          <span class="leaderboard-rank">${rank}</span>
+          <span class="leaderboard-username">${player.username}</span>
+          <span class="leaderboard-stats">
+            <span class="leaderboard-stat-w">${player.wins}W</span>
+            <span class="leaderboard-stat-l">${player.losses}L</span>
+            <span class="leaderboard-stat-d">${player.draws}D</span>
+          </span>
         </div>
-      `,
-    )
+      `;
+    })
     .join("");
 }
