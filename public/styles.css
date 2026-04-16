@@ -48,7 +48,6 @@ body[data-view="online-game"] .game-shell {
   padding-top: 16px;
 }
 
-body[data-view="online-game"] .intro,
 body[data-view="online-game"] .mode-toggle,
 body[data-view="online-game"] #online-mode > .identity-panel {
   display: none;
