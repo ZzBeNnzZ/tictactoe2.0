@@ -52,10 +52,76 @@ const elements =
       scoreO: document.querySelector("#score-o"),
       scoreCardX: document.querySelector("#score-card-x"),
       scoreCardO: document.querySelector("#score-card-o"),
+      scoreboard: document.querySelector(".scoreboard"),
+      turnIndicator: document.querySelector("#turn-indicator"),
       localPlayerXName: document.querySelector("#local-player-x-name"),
       localPlayerOName: document.querySelector("#local-player-o-name"),
       localStatsList: document.querySelector("#local-stats-list"),
     };
+
+function flipStatus(el, message, type) {
+  if (!message) {
+    el.textContent = "";
+    el.dataset.type = "";
+    return;
+  }
+  if (el.textContent && !el.classList.contains("flip-out")) {
+    el.classList.remove("flip-in");
+    el.classList.add("flip-out");
+    el.addEventListener("animationend", () => {
+      el.textContent = message;
+      el.dataset.type = type || "";
+      el.classList.remove("flip-out");
+      el.classList.add("flip-in");
+      el.addEventListener("animationend", () => el.classList.remove("flip-in"), { once: true });
+    }, { once: true });
+  } else {
+    el.classList.remove("flip-out");
+    el.textContent = message;
+    el.dataset.type = type || "";
+    el.classList.add("flip-in");
+    el.addEventListener("animationend", () => el.classList.remove("flip-in"), { once: true });
+  }
+}
+
+function triggerRipple(cell, player) {
+  const ripple = document.createElement("span");
+  ripple.className = "cell-ripple";
+  ripple.style.setProperty("--ripple-color", player === "X" ? "var(--x-color)" : "var(--o-color)");
+  cell.append(ripple);
+  ripple.addEventListener("animationend", () => ripple.remove(), { once: true });
+}
+
+function triggerConfetti(boardEl) {
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+  const rect = boardEl.getBoundingClientRect();
+  const container = document.createElement("div");
+  container.className = "confetti-container";
+  container.style.top = `${rect.top}px`;
+  container.style.left = `${rect.left}px`;
+  container.style.width = `${rect.width}px`;
+  container.style.height = `${rect.height}px`;
+  container.style.setProperty("--fall-dist", `${rect.height + 20}px`);
+
+  const colors = ["var(--x-color)", "var(--o-color)", "#FFD700", "#FF6B6B", "#4ECDC4", "#45B7D1", "#FFA07A", "#C084FC"];
+
+  for (let i = 0; i < 90; i += 1) {
+    const piece = document.createElement("span");
+    piece.className = "confetti-piece";
+    piece.style.setProperty("--x", `${Math.random() * 100}%`);
+    piece.style.setProperty("--size", `${4 + Math.random() * 7}px`);
+    piece.style.setProperty("--color", colors[Math.floor(Math.random() * colors.length)]);
+    piece.style.setProperty("--rotation", `${Math.random() * 720 - 360}deg`);
+    piece.style.setProperty("--drift", `${Math.random() * 80 - 40}px`);
+    piece.style.setProperty("--duration", `${0.7 + Math.random() * 0.8}s`);
+    piece.style.setProperty("--delay", `${Math.random() * 0.5}s`);
+    container.append(piece);
+  }
+
+  document.body.append(container);
+  setTimeout(() => container.remove(), 1600);
+}
 
 export function createEmptyBoard(size) {
   return Array.from({ length: size }, () => Array.from({ length: size }, () => ""));
@@ -237,6 +303,9 @@ export function handleCellClick(row, col) {
     return false;
   }
 
+  const clickedCell = elements ? elements.board.children[row * game.size + col] : null;
+  if (clickedCell) triggerRipple(clickedCell, game.currentPlayer);
+
   game.movesPlayed += 1;
   const result = checkWinner(game.board, row, col, game.winLength);
 
@@ -247,6 +316,7 @@ export function handleCellClick(row, col) {
     setStatus(`Player ${game.currentPlayer} wins!`, `win-${game.currentPlayer.toLowerCase()}`);
     renderBoard();
     updateScoreDisplay();
+    if (elements) triggerConfetti(elements.board);
     recordLocalResult("win", game.currentPlayer);
     return true;
   }
@@ -261,13 +331,13 @@ export function handleCellClick(row, col) {
   game.currentPlayer = game.currentPlayer === "X" ? "O" : "X";
   setStatus(`Player ${game.currentPlayer}'s turn`, game.currentPlayer.toLowerCase());
   renderBoard();
+  updateScoreDisplay();
   return true;
 }
 
 export function setStatus(message, type = "") {
   if (elements) {
-    elements.status.textContent = message;
-    elements.status.dataset.type = type;
+    flipStatus(elements.status, message, type);
   }
 }
 
@@ -277,8 +347,21 @@ function updateScoreDisplay() {
   elements.scoreX.textContent = scores.X;
   elements.scoreO.textContent = scores.O;
 
-  elements.scoreCardX.classList.toggle("active-turn", game.currentPlayer === "X" && !game.winner);
-  elements.scoreCardO.classList.toggle("active-turn", game.currentPlayer === "O" && !game.winner);
+  const xActive = game.currentPlayer === "X" && !game.winner;
+  const oActive = game.currentPlayer === "O" && !game.winner;
+  elements.scoreCardX.classList.toggle("active-turn", xActive);
+  elements.scoreCardO.classList.toggle("active-turn", oActive);
+
+  if (elements.turnIndicator && elements.scoreboard) {
+    const activeCard = xActive ? elements.scoreCardX : (oActive ? elements.scoreCardO : null);
+    if (activeCard) {
+      const boardRect = elements.scoreboard.getBoundingClientRect();
+      const cardRect = activeCard.getBoundingClientRect();
+      elements.turnIndicator.style.left = `${cardRect.left - boardRect.left}px`;
+      elements.turnIndicator.style.width = `${cardRect.width}px`;
+      elements.turnIndicator.style.backgroundColor = xActive ? "var(--x-color)" : "var(--o-color)";
+    }
+  }
 }
 
 function getLocalPlayerNames() {
@@ -315,7 +398,7 @@ function renderLocalStats() {
   elements.localStatsList.innerHTML = rows
     .map(
       (row, index) => `
-        <div class="leaderboard-row">
+        <div class="leaderboard-row" style="--i: ${index}">
           <span>${index + 1}. ${row.username}</span>
           <span>${row.wins}W ${row.losses}L ${row.draws}D</span>
         </div>

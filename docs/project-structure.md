@@ -26,13 +26,17 @@ Local games run entirely in the browser through `public/app.js`. Online games ru
 │   ├── username.js
 │   ├── identity.js
 │   ├── local-stats.js
+│   ├── online-view.js
 │   ├── app.js
 │   └── client.js
 └── docs/
     ├── project-structure.md
     └── superpowers/
-        └── plans/
-            └── 2026-04-15-online-multiplayer.md
+        ├── plans/
+        │   ├── 2026-04-15-online-multiplayer.md
+        │   └── 2026-04-15-leaderboard.md
+        └── specs/
+            └── 2026-04-15-animation-system-design.md
 ```
 
 ## Server Files
@@ -128,13 +132,14 @@ Contains:
 
 - Page layout.
 - Settings controls.
-- Scoreboard.
+- Scoreboard and sliding turn indicator.
 - Board and cell styling.
 - Winning-cell styling.
 - Local/online mode toggle.
-- Online lobby layout.
+- Online lobby layout (action toggle + create/join panels).
 - Online player badge and leave button.
 - Username and leaderboard sections.
+- Full animation system: slide-in/out panel transitions, cell ripple, status flip, board confetti, leaderboard stagger, reduced-motion override.
 
 ### `public/username.js`
 
@@ -148,6 +153,15 @@ Cookie-backed browser identity state. Stores the public username in `ttt_usernam
 
 Browser-only local leaderboard storage helpers. Stores local results in `localStorage` under `ttt_local_stats_v1`.
 
+### `public/online-view.js`
+
+Online view helpers shared between `client.js` and any code that needs to know which panels are visible.
+
+Exports:
+
+- `formatOnlineRoomCode(code)` — formats room code for display.
+- `getOnlineVisibilityState(view)` — returns `{ pageView, lobbyHidden, gameHidden }` for a given view name.
+
 ### `public/app.js`
 
 Owns local offline game behavior.
@@ -160,9 +174,11 @@ Responsibilities:
 - Render local moves.
 - Handle local clicks.
 - Record local wins, losses, and draws in browser storage.
-- Update scores.
+- Update scores and sliding turn indicator.
 - Render browser-only local stats.
 - Show local win/draw status.
+- Trigger confetti on win and cell ripple on click.
+- Animate status message changes (flip effect).
 
 It imports no server code and does not use Socket.io.
 
@@ -174,12 +190,14 @@ Responsibilities:
 
 - Connect to Socket.io.
 - Initialize cookie-backed username identity.
-- Switch between Local and Online views.
+- Switch between Local and Online views with animated slide transitions.
+- Toggle lobby Create/Join panels with animated slide transitions.
 - Emit username-aware `create-room`, `join-room`, and `make-move`.
 - Render online board state from server events.
 - Fetch and render `/api/leaderboard`.
 - Disable cells when it is not this browser's turn.
-- Show room errors, win/draw status, and disconnect status.
+- Show room errors, win/draw status, and disconnect status with flip animation.
+- Trigger confetti on win and cell ripple on click.
 - Handle the Leave Game button.
 
 It treats the server as the source of truth. It should not decide whether a move is valid beyond basic UI guard checks.

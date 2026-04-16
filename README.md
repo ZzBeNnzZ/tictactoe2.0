@@ -16,6 +16,13 @@ A browser-based tic tac toe game with configurable board size, configurable win 
 - Draw detection
 - Winning-cell highlights
 - Socket.io realtime updates
+- Animated panel transitions (slide in/out) between modes and lobby panels
+- Cell ripple animation on mark placement
+- Confetti celebration on win
+- Flip animation on status message changes
+- Staggered entrance animation for leaderboard rows
+- Sliding turn indicator on scoreboard
+- Respects `prefers-reduced-motion`
 
 ## Requirements
 
@@ -60,13 +67,14 @@ Example settings:
 1. Player 1 opens the app.
 2. Enter a player name.
 3. Select `Online`.
-4. Select `Create Room`.
-5. Share the 6-character room code with Player 2.
-6. Player 2 opens the same app URL.
-7. Enter a player name.
-8. Select `Online`.
-9. Enter the room code and select `Join`.
-10. Player 1 is `X`; Player 2 is `O`.
+4. Select `Create a Room`.
+5. Configure board size and win length, then select `Create Room`.
+6. Share the 6-character room code with Player 2.
+7. Player 2 opens the same app URL.
+8. Enter a player name.
+9. Select `Online`.
+10. Select `Join a Room`, enter the room code, and select `Join`.
+11. Player 1 is `X`; Player 2 is `O`.
 
 Only the current player's browser can make a move. The server validates moves and broadcasts the updated board to both players.
 

@@ -29,24 +29,119 @@ const elOnlineRoomCode = document.querySelector("#online-room-code");
 const elBtnLeave = document.querySelector("#btn-leave");
 const elOnlineLeaderboard = document.querySelector("#online-leaderboard-list");
 const elRefreshLeaderboard = document.querySelector("#btn-refresh-leaderboard");
+const elBtnLobbyCreate = document.querySelector("#btn-lobby-create");
+const elBtnLobbyJoin = document.querySelector("#btn-lobby-join");
+const elLobbyCreatePanel = document.querySelector("#lobby-create-panel");
+const elLobbyJoinPanel = document.querySelector("#lobby-join-panel");
 
 initIdentity();
 loadOnlineLeaderboard();
 
+// --- Animation helpers ---
+
+function slideInPanel(el, direction) {
+  el.hidden = false;
+  const cls = direction === "right" ? "slide-in-right" : "slide-in-left";
+  el.classList.add(cls);
+  el.addEventListener("animationend", () => el.classList.remove(cls), { once: true });
+}
+
+function fadeHidePanel(el, onDone) {
+  if (el.hidden) {
+    if (onDone) onDone();
+    return;
+  }
+  el.classList.add("fade-out-quick");
+  el.addEventListener("animationend", () => {
+    el.classList.remove("fade-out-quick");
+    el.hidden = true;
+    if (onDone) onDone();
+  }, { once: true });
+}
+
+function flipStatus(el, message, type, autoHide = false) {
+  if (!message) {
+    el.textContent = "";
+    el.dataset.type = "";
+    if (autoHide) el.hidden = true;
+    return;
+  }
+  if (el.textContent && !el.hidden && !el.classList.contains("flip-out")) {
+    el.classList.remove("flip-in");
+    el.classList.add("flip-out");
+    el.addEventListener("animationend", () => {
+      el.textContent = message;
+      el.dataset.type = type || "";
+      el.hidden = false;
+      el.classList.remove("flip-out");
+      el.classList.add("flip-in");
+      el.addEventListener("animationend", () => el.classList.remove("flip-in"), { once: true });
+    }, { once: true });
+  } else {
+    el.classList.remove("flip-out");
+    el.textContent = message;
+    el.dataset.type = type || "";
+    el.hidden = false;
+    el.classList.add("flip-in");
+    el.addEventListener("animationend", () => el.classList.remove("flip-in"), { once: true });
+  }
+}
+
+function triggerRipple(cell, player) {
+  const ripple = document.createElement("span");
+  ripple.className = "cell-ripple";
+  ripple.style.setProperty("--ripple-color", player === "X" ? "var(--x-color)" : "var(--o-color)");
+  cell.append(ripple);
+  ripple.addEventListener("animationend", () => ripple.remove(), { once: true });
+}
+
+function triggerConfetti(boardEl) {
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+  const rect = boardEl.getBoundingClientRect();
+  const container = document.createElement("div");
+  container.className = "confetti-container";
+  container.style.top = `${rect.top}px`;
+  container.style.left = `${rect.left}px`;
+  container.style.width = `${rect.width}px`;
+  container.style.height = `${rect.height}px`;
+  container.style.setProperty("--fall-dist", `${rect.height + 20}px`);
+
+  const colors = ["var(--x-color)", "var(--o-color)", "#FFD700", "#FF6B6B", "#4ECDC4", "#45B7D1", "#FFA07A", "#C084FC"];
+
+  for (let i = 0; i < 90; i += 1) {
+    const piece = document.createElement("span");
+    piece.className = "confetti-piece";
+    piece.style.setProperty("--x", `${Math.random() * 100}%`);
+    piece.style.setProperty("--size", `${4 + Math.random() * 7}px`);
+    piece.style.setProperty("--color", colors[Math.floor(Math.random() * colors.length)]);
+    piece.style.setProperty("--rotation", `${Math.random() * 720 - 360}deg`);
+    piece.style.setProperty("--drift", `${Math.random() * 80 - 40}px`);
+    piece.style.setProperty("--duration", `${0.7 + Math.random() * 0.8}s`);
+    piece.style.setProperty("--delay", `${Math.random() * 0.5}s`);
+    container.append(piece);
+  }
+
+  document.body.append(container);
+  setTimeout(() => container.remove(), 1600);
+}
+
 elBtnLocal.addEventListener("click", () => {
+  if (!elLocalMode.hidden) return;
   elBtnLocal.classList.add("active");
   elBtnOnline.classList.remove("active");
-  elLocalMode.hidden = false;
-  elOnlineMode.hidden = true;
   document.body.dataset.view = "local";
+  fadeHidePanel(elOnlineMode, () => slideInPanel(elLocalMode, "left"));
 });
 
 elBtnOnline.addEventListener("click", () => {
+  if (!elOnlineMode.hidden) return;
   elBtnOnline.classList.add("active");
   elBtnLocal.classList.remove("active");
-  elLocalMode.hidden = true;
-  elOnlineMode.hidden = false;
-  applyOnlineView("lobby");
+  fadeHidePanel(elLocalMode, () => {
+    applyOnlineView("lobby");
+    slideInPanel(elOnlineMode, "right");
+  });
 });
 
 elOnlineSettings.addEventListener("submit", (event) => {
@@ -88,6 +183,30 @@ elBtnLeave.addEventListener("click", () => {
 
 elRefreshLeaderboard.addEventListener("click", () => {
   loadOnlineLeaderboard();
+});
+
+elBtnLobbyCreate.addEventListener("click", () => {
+  if (!elLobbyCreatePanel.hidden) return;
+  elBtnLobbyCreate.classList.add("active");
+  elBtnLobbyJoin.classList.remove("active");
+  setLobbyStatus("", "");
+  if (!elLobbyJoinPanel.hidden) {
+    fadeHidePanel(elLobbyJoinPanel, () => slideInPanel(elLobbyCreatePanel, "left"));
+  } else {
+    slideInPanel(elLobbyCreatePanel, "left");
+  }
+});
+
+elBtnLobbyJoin.addEventListener("click", () => {
+  if (!elLobbyJoinPanel.hidden) return;
+  elBtnLobbyJoin.classList.add("active");
+  elBtnLobbyCreate.classList.remove("active");
+  setLobbyStatus("", "");
+  if (!elLobbyCreatePanel.hidden) {
+    fadeHidePanel(elLobbyCreatePanel, () => slideInPanel(elLobbyJoinPanel, "right"));
+  } else {
+    slideInPanel(elLobbyJoinPanel, "right");
+  }
 });
 
 window.addEventListener("ttt:username-change", () => {
@@ -140,6 +259,7 @@ socket.on("game-update", (update) => {
   if (update.winner) {
     const youWon = update.winner === myPlayer;
     setOnlineStatus(youWon ? "You win!" : `Player ${update.winner} wins`, `win-${update.winner.toLowerCase()}`);
+    triggerConfetti(elOnlineBoard);
     loadOnlineLeaderboard();
     return;
   }
@@ -216,11 +336,13 @@ function handleOnlineCellClick(row, col) {
     return;
   }
 
+  const cell = elOnlineBoard.children[row * gameSize + col];
+  if (cell) triggerRipple(cell, myPlayer);
+
   socket.emit("make-move", { row, col });
 }
 
 function showLobby() {
-  applyOnlineView("lobby");
   elRoomCreated.hidden = true;
   elJoinInput.value = "";
   setLobbyStatus("", "");
@@ -228,10 +350,28 @@ function showLobby() {
   gameState = null;
   currentRoomCode = "";
   elOnlineRoomCode.textContent = "";
+  elBtnLobbyCreate.classList.remove("active");
+  elBtnLobbyJoin.classList.remove("active");
+  elLobbyCreatePanel.hidden = true;
+  elLobbyJoinPanel.hidden = true;
+
+  fadeHidePanel(elOnlineGame, () => {
+    document.body.dataset.view = "online-lobby";
+    elLobby.hidden = false;
+    void elLobby.offsetWidth;
+    elLobby.classList.add("slide-in-left");
+    elLobby.addEventListener("animationend", () => elLobby.classList.remove("slide-in-left"), { once: true });
+  });
 }
 
 function showGame() {
-  applyOnlineView("game");
+  fadeHidePanel(elLobby, () => {
+    document.body.dataset.view = "online-game";
+    elOnlineGame.hidden = false;
+    void elOnlineGame.offsetWidth;
+    elOnlineGame.classList.add("slide-in-right");
+    elOnlineGame.addEventListener("animationend", () => elOnlineGame.classList.remove("slide-in-right"), { once: true });
+  });
 }
 
 function applyOnlineView(view) {
@@ -242,13 +382,11 @@ function applyOnlineView(view) {
 }
 
 function setLobbyStatus(message, type) {
-  elLobbyStatus.textContent = message;
-  elLobbyStatus.dataset.type = type;
+  flipStatus(elLobbyStatus, message, type, true);
 }
 
 function setOnlineStatus(message, type) {
-  elOnlineStatus.textContent = message;
-  elOnlineStatus.dataset.type = type;
+  flipStatus(elOnlineStatus, message, type);
 }
 
 async function loadOnlineLeaderboard() {
@@ -270,7 +408,7 @@ function renderOnlineLeaderboard(players) {
   elOnlineLeaderboard.innerHTML = players
     .map(
       (player, index) => `
-        <div class="leaderboard-row">
+        <div class="leaderboard-row" style="--i: ${index}">
           <span>${index + 1}. ${player.username}</span>
           <span>${player.wins}W ${player.losses}L ${player.draws}D</span>
         </div>
