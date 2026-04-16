@@ -1,3 +1,13 @@
+import { getCurrentUsername } from "./identity.js";
+import {
+  getLocalRows,
+  readLocalStats,
+  recordLocalDraw,
+  recordLocalWin,
+  writeLocalStats,
+} from "./local-stats.js";
+import { normalizeUsername } from "./username.js";
+
 export const game = {
   size: 10,
   winLength: 5,
@@ -42,6 +52,9 @@ const elements =
       scoreO: document.querySelector("#score-o"),
       scoreCardX: document.querySelector("#score-card-x"),
       scoreCardO: document.querySelector("#score-card-o"),
+      localPlayerXName: document.querySelector("#local-player-x-name"),
+      localPlayerOName: document.querySelector("#local-player-o-name"),
+      localStatsList: document.querySelector("#local-stats-list"),
     };
 
 export function createEmptyBoard(size) {
@@ -234,12 +247,14 @@ export function handleCellClick(row, col) {
     setStatus(`Player ${game.currentPlayer} wins!`, `win-${game.currentPlayer.toLowerCase()}`);
     renderBoard();
     updateScoreDisplay();
+    recordLocalResult("win", game.currentPlayer);
     return true;
   }
 
   if (isDraw(game.board, game.movesPlayed)) {
     setStatus("Draw game", "draw");
     renderBoard();
+    recordLocalResult("draw");
     return true;
   }
 
@@ -266,6 +281,49 @@ function updateScoreDisplay() {
   elements.scoreCardO.classList.toggle("active-turn", game.currentPlayer === "O" && !game.winner);
 }
 
+function getLocalPlayerNames() {
+  return {
+    X: normalizeUsername(elements.localPlayerXName.value) || "Player X",
+    O: normalizeUsername(elements.localPlayerOName.value) || "Player O",
+  };
+}
+
+function recordLocalResult(type, winnerMark = "") {
+  const stats = readLocalStats();
+  const names = getLocalPlayerNames();
+
+  if (type === "draw") {
+    recordLocalDraw(stats, names.X, names.O);
+  } else {
+    const loserMark = winnerMark === "X" ? "O" : "X";
+    recordLocalWin(stats, names[winnerMark], names[loserMark]);
+  }
+
+  writeLocalStats(stats);
+  renderLocalStats();
+}
+
+function renderLocalStats() {
+  if (!elements || !elements.localStatsList) return;
+
+  const rows = getLocalRows(readLocalStats()).slice(0, 10);
+  if (rows.length === 0) {
+    elements.localStatsList.innerHTML = `<p class="leaderboard-empty">No local games yet.</p>`;
+    return;
+  }
+
+  elements.localStatsList.innerHTML = rows
+    .map(
+      (row, index) => `
+        <div class="leaderboard-row">
+          <span>${index + 1}. ${row.username}</span>
+          <span>${row.wins}W ${row.losses}L ${row.draws}D</span>
+        </div>
+      `,
+    )
+    .join("");
+}
+
 function isWinningCell(row, col) {
   return game.winningCells.some(([winRow, winCol]) => winRow === row && winCol === col);
 }
@@ -276,5 +334,12 @@ if (elements) {
     startGame(Number(elements.sizeInput.value), Number(elements.winInput.value));
   });
 
+  elements.localPlayerXName.value = getCurrentUsername();
+  window.addEventListener("ttt:username-change", (event) => {
+    if (!elements.localPlayerXName.value) {
+      elements.localPlayerXName.value = event.detail.username;
+    }
+  });
+  renderLocalStats();
   startGame(Number(elements.sizeInput.value), Number(elements.winInput.value));
 }

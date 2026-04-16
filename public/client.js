@@ -1,8 +1,12 @@
+import { getCurrentUsername, initIdentity } from "./identity.js";
+import { formatOnlineRoomCode, getOnlineVisibilityState } from "./online-view.js";
+
 const socket = io();
 
 let myPlayer = null;
 let gameState = null;
 let gameSize = 10;
+let currentRoomCode = "";
 
 const elBtnLocal = document.querySelector("#btn-mode-local");
 const elBtnOnline = document.querySelector("#btn-mode-online");
@@ -21,13 +25,20 @@ const elJoinInput = document.querySelector("#join-code-input");
 const elLobbyStatus = document.querySelector("#lobby-status");
 const elOnlineStatus = document.querySelector("#online-status");
 const elPlayerBadge = document.querySelector("#online-player-badge");
+const elOnlineRoomCode = document.querySelector("#online-room-code");
 const elBtnLeave = document.querySelector("#btn-leave");
+const elOnlineLeaderboard = document.querySelector("#online-leaderboard-list");
+const elRefreshLeaderboard = document.querySelector("#btn-refresh-leaderboard");
+
+initIdentity();
+loadOnlineLeaderboard();
 
 elBtnLocal.addEventListener("click", () => {
   elBtnLocal.classList.add("active");
   elBtnOnline.classList.remove("active");
   elLocalMode.hidden = false;
   elOnlineMode.hidden = true;
+  document.body.dataset.view = "local";
 });
 
 elBtnOnline.addEventListener("click", () => {
@@ -35,14 +46,21 @@ elBtnOnline.addEventListener("click", () => {
   elBtnLocal.classList.remove("active");
   elLocalMode.hidden = true;
   elOnlineMode.hidden = false;
+  applyOnlineView("lobby");
 });
 
 elOnlineSettings.addEventListener("submit", (event) => {
   event.preventDefault();
   const size = Number(elOnlineBoardSize.value);
   const winLength = Number(elOnlineWinLength.value);
+  const username = getCurrentUsername();
+  if (!username) {
+    setLobbyStatus("Enter a name before creating a room.", "error");
+    return;
+  }
+
   setLobbyStatus("", "");
-  socket.emit("create-room", { size, winLength });
+  socket.emit("create-room", { size, winLength, username });
 });
 
 elJoinForm.addEventListener("submit", (event) => {
@@ -52,8 +70,14 @@ elJoinForm.addEventListener("submit", (event) => {
     return;
   }
 
+  const username = getCurrentUsername();
+  if (!username) {
+    setLobbyStatus("Enter a name before joining a room.", "error");
+    return;
+  }
+
   setLobbyStatus("", "");
-  socket.emit("join-room", { code });
+  socket.emit("join-room", { code, username });
 });
 
 elBtnLeave.addEventListener("click", () => {
@@ -62,7 +86,16 @@ elBtnLeave.addEventListener("click", () => {
   showLobby();
 });
 
+elRefreshLeaderboard.addEventListener("click", () => {
+  loadOnlineLeaderboard();
+});
+
+window.addEventListener("ttt:username-change", () => {
+  loadOnlineLeaderboard();
+});
+
 socket.on("room-created", ({ code }) => {
+  currentRoomCode = code;
   elRoomCode.textContent = code;
   elRoomCreated.hidden = false;
   setLobbyStatus("Waiting for opponent...", "waiting");
@@ -72,8 +105,9 @@ socket.on("room-error", ({ message }) => {
   setLobbyStatus(message, "error");
 });
 
-socket.on("game-start", ({ player, size, board }) => {
+socket.on("game-start", ({ player, size, board, code }) => {
   myPlayer = player;
+  currentRoomCode = code || currentRoomCode;
   gameSize = size;
   gameState = {
     board,
@@ -85,6 +119,7 @@ socket.on("game-start", ({ player, size, board }) => {
 
   elPlayerBadge.className = `online-player-badge badge-${player.toLowerCase()}`;
   elPlayerBadge.innerHTML = `You are <strong>${player}</strong>`;
+  elOnlineRoomCode.textContent = formatOnlineRoomCode(currentRoomCode);
 
   showGame();
   buildOnlineBoard(size);
@@ -98,12 +133,14 @@ socket.on("game-update", (update) => {
 
   if (update.winner === "draw") {
     setOnlineStatus("Draw game", "draw");
+    loadOnlineLeaderboard();
     return;
   }
 
   if (update.winner) {
     const youWon = update.winner === myPlayer;
     setOnlineStatus(youWon ? "You win!" : `Player ${update.winner} wins`, `win-${update.winner.toLowerCase()}`);
+    loadOnlineLeaderboard();
     return;
   }
 
@@ -183,18 +220,25 @@ function handleOnlineCellClick(row, col) {
 }
 
 function showLobby() {
-  elLobby.hidden = false;
-  elOnlineGame.hidden = true;
+  applyOnlineView("lobby");
   elRoomCreated.hidden = true;
   elJoinInput.value = "";
   setLobbyStatus("", "");
   myPlayer = null;
   gameState = null;
+  currentRoomCode = "";
+  elOnlineRoomCode.textContent = "";
 }
 
 function showGame() {
-  elLobby.hidden = true;
-  elOnlineGame.hidden = false;
+  applyOnlineView("game");
+}
+
+function applyOnlineView(view) {
+  const state = getOnlineVisibilityState(view);
+  document.body.dataset.view = state.pageView;
+  elLobby.hidden = state.lobbyHidden;
+  elOnlineGame.hidden = state.gameHidden;
 }
 
 function setLobbyStatus(message, type) {
@@ -205,4 +249,32 @@ function setLobbyStatus(message, type) {
 function setOnlineStatus(message, type) {
   elOnlineStatus.textContent = message;
   elOnlineStatus.dataset.type = type;
+}
+
+async function loadOnlineLeaderboard() {
+  try {
+    const response = await fetch("/api/leaderboard");
+    const data = await response.json();
+    renderOnlineLeaderboard(data.players || []);
+  } catch {
+    elOnlineLeaderboard.innerHTML = `<p class="leaderboard-empty">Leaderboard unavailable.</p>`;
+  }
+}
+
+function renderOnlineLeaderboard(players) {
+  if (players.length === 0) {
+    elOnlineLeaderboard.innerHTML = `<p class="leaderboard-empty">No online games yet.</p>`;
+    return;
+  }
+
+  elOnlineLeaderboard.innerHTML = players
+    .map(
+      (player, index) => `
+        <div class="leaderboard-row">
+          <span>${index + 1}. ${player.username}</span>
+          <span>${player.wins}W ${player.losses}L ${player.draws}D</span>
+        </div>
+      `,
+    )
+    .join("");
 }

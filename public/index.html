@@ -25,6 +25,29 @@
       </div>
 
       <div id="local-mode">
+        <div class="local-name-row" aria-label="Local player names">
+          <label for="local-player-x-name">
+            Player X name
+            <input
+              id="local-player-x-name"
+              type="text"
+              maxlength="20"
+              placeholder="Player X"
+              autocomplete="off"
+            />
+          </label>
+          <label for="local-player-o-name">
+            Player O name
+            <input
+              id="local-player-o-name"
+              type="text"
+              maxlength="20"
+              placeholder="Player O"
+              autocomplete="off"
+            />
+          </label>
+        </div>
+
         <form class="controls" id="settings-form">
           <label for="board-size">
             Board size
@@ -74,9 +97,41 @@
         <section class="board-wrap" aria-label="Game board">
           <div class="board" id="local-board"></div>
         </section>
+
+        <section
+          class="leaderboard-section"
+          aria-labelledby="local-stats-heading"
+        >
+          <h2 id="local-stats-heading">This Browser Stats</h2>
+          <div class="leaderboard-list" id="local-stats-list"></div>
+        </section>
       </div>
 
       <div id="online-mode" hidden>
+        <section class="identity-panel" aria-labelledby="identity-heading">
+          <div>
+            <h2 id="identity-heading">Player name</h2>
+            <p class="identity-copy">
+              Your name is remembered on this computer.
+            </p>
+          </div>
+          <form class="identity-form" id="identity-form">
+            <label for="username-input">
+              Name
+              <input
+                id="username-input"
+                name="username"
+                type="text"
+                maxlength="20"
+                autocomplete="nickname"
+                placeholder="Enter your name"
+              />
+            </label>
+            <button type="submit">Use name</button>
+          </form>
+          <p class="identity-current" id="identity-current" role="status"></p>
+        </section>
+
         <div id="online-lobby">
           <div class="lobby-section">
             <h2 class="lobby-heading">Create a room</h2>
@@ -137,7 +192,13 @@
         </div>
 
         <div id="online-game" hidden>
-          <div class="online-player-badge" id="online-player-badge"></div>
+          <div class="online-game-header">
+            <button class="leave-btn" id="btn-leave" type="button">
+              Back to lobby
+            </button>
+            <p class="online-room-code" id="online-room-code"></p>
+            <div class="online-player-badge" id="online-player-badge"></div>
+          </div>
           <p
             class="status"
             id="online-status"
@@ -147,10 +208,22 @@
           <section class="board-wrap" aria-label="Game board">
             <div class="board" id="online-board"></div>
           </section>
-          <button class="leave-btn" id="btn-leave" type="button">
-            Leave game
-          </button>
         </div>
+
+        <section
+          class="leaderboard-section"
+          aria-labelledby="online-leaderboard-heading"
+        >
+          <h2 id="online-leaderboard-heading">Online Leaderboard</h2>
+          <div class="leaderboard-list" id="online-leaderboard-list"></div>
+          <button
+            class="secondary-btn"
+            id="btn-refresh-leaderboard"
+            type="button"
+          >
+            Refresh leaderboard
+          </button>
+        </section>
       </div>
     </main>
 

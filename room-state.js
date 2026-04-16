@@ -1,4 +1,5 @@
 import { checkWinner, createEmptyBoard, isDraw, isValidSettings } from "./game-logic.js";
+import { validateUsername } from "./public/username.js";
 
 function defaultGenerateCode() {
   return Math.random().toString(36).slice(2, 8).toUpperCase();
@@ -12,6 +13,16 @@ function playerForIndex(index) {
   return index === 0 ? "X" : "O";
 }
 
+function playerToAssignment(player, index) {
+  const mark = playerForIndex(index);
+  return {
+    socketId: player.socketId,
+    username: player.username,
+    player: mark,
+    mark,
+  };
+}
+
 function buildUpdate(room) {
   return {
     board: room.board.map((row) => [...row]),
@@ -19,6 +30,30 @@ function buildUpdate(room) {
     winner: room.winner,
     winningCells: room.winningCells.map((cell) => [...cell]),
     movesPlayed: room.movesPlayed,
+  };
+}
+
+function buildGameResult(room) {
+  const players = room.players.map((player) => ({
+    username: player.username,
+    mark: player.mark,
+  }));
+
+  if (room.winner === "draw") {
+    return {
+      type: "draw",
+      players,
+    };
+  }
+
+  const winner = room.players.find((player) => player.mark === room.winner);
+  const loser = room.players.find((player) => player.mark !== room.winner);
+
+  return {
+    type: "win",
+    winnerUsername: winner.username,
+    loserUsername: loser.username,
+    players,
   };
 }
 
@@ -36,16 +71,27 @@ export function createRoomStore({ generateCode = defaultGenerateCode } = {}) {
     throw new Error("Could not generate a unique room code.");
   }
 
-  function createRoom({ socketId, size, winLength }) {
+  function createRoom({ socketId, username, size, winLength }) {
     const validation = isValidSettings(size, winLength);
     if (!validation.valid) {
       return { ok: false, message: validation.message };
     }
 
+    const usernameValidation = validateUsername(username);
+    if (!usernameValidation.valid) {
+      return { ok: false, message: usernameValidation.message };
+    }
+
     const code = generateUniqueCode();
     const room = {
       code,
-      players: [socketId],
+      players: [
+        {
+          socketId,
+          username: usernameValidation.username,
+          mark: "X",
+        },
+      ],
       board: createEmptyBoard(size),
       currentPlayer: "X",
       winner: null,
@@ -60,13 +106,18 @@ export function createRoomStore({ generateCode = defaultGenerateCode } = {}) {
     return { ok: true, code, room };
   }
 
-  function joinRoom({ socketId, code }) {
+  function joinRoom({ socketId, username, code }) {
     const room = rooms.get(normalizeCode(code));
     if (!room) {
       return { ok: false, message: "Room not found." };
     }
 
-    if (room.players.includes(socketId)) {
+    const usernameValidation = validateUsername(username);
+    if (!usernameValidation.valid) {
+      return { ok: false, message: usernameValidation.message };
+    }
+
+    if (room.players.some((player) => player.socketId === socketId)) {
       return { ok: false, message: "You are already in this room." };
     }
 
@@ -74,17 +125,18 @@ export function createRoomStore({ generateCode = defaultGenerateCode } = {}) {
       return { ok: false, message: "Room is full." };
     }
 
-    room.players.push(socketId);
+    room.players.push({
+      socketId,
+      username: usernameValidation.username,
+      mark: playerForIndex(room.players.length),
+    });
     socketRooms.set(socketId, room.code);
 
     return {
       ok: true,
       code: room.code,
       room,
-      players: room.players.map((id, index) => ({
-        socketId: id,
-        player: playerForIndex(index),
-      })),
+      players: room.players.map(playerToAssignment),
     };
   }
 
@@ -104,8 +156,9 @@ export function createRoomStore({ generateCode = defaultGenerateCode } = {}) {
       return { ok: false, message: "Game is over." };
     }
 
-    const playerIndex = room.players.indexOf(socketId);
-    const playerMark = playerForIndex(playerIndex);
+    const playerIndex = room.players.findIndex((player) => player.socketId === socketId);
+    const roomPlayer = room.players[playerIndex];
+    const playerMark = roomPlayer?.mark || playerForIndex(playerIndex);
 
     if (playerIndex === -1) {
       return { ok: false, message: "Room not found." };
@@ -144,6 +197,7 @@ export function createRoomStore({ generateCode = defaultGenerateCode } = {}) {
       ok: true,
       code: room.code,
       update: buildUpdate(room),
+      gameResult: room.winner ? buildGameResult(room) : null,
     };
   }
 
@@ -156,9 +210,11 @@ export function createRoomStore({ generateCode = defaultGenerateCode } = {}) {
       return { ok: false };
     }
 
-    const opponentSocketIds = room.players.filter((id) => id !== socketId);
-    for (const playerSocketId of room.players) {
-      socketRooms.delete(playerSocketId);
+    const opponentSocketIds = room.players
+      .filter((player) => player.socketId !== socketId)
+      .map((player) => player.socketId);
+    for (const player of room.players) {
+      socketRooms.delete(player.socketId);
     }
     rooms.delete(code);
 

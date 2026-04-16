@@ -32,11 +32,27 @@ input {
   font: inherit;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 /* Layout */
 .game-shell {
   width: min(96vw, 720px);
   margin: 0 auto;
   padding: 32px 16px;
+}
+
+body[data-view="online-game"] .game-shell {
+  width: min(96vw, 660px);
+  padding-top: 16px;
+}
+
+body[data-view="online-game"] .intro,
+body[data-view="online-game"] .mode-toggle,
+body[data-view="online-game"] #online-mode > .identity-panel,
+body[data-view="online-game"] #online-mode > .leaderboard-section {
+  display: none;
 }
 
 /* Header */
@@ -56,6 +72,62 @@ h1 {
   font-size: 1rem;
 }
 
+.identity-panel {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: end;
+  margin-bottom: 18px;
+  padding: 16px 20px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.identity-panel h2 {
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.identity-copy,
+.identity-current {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.identity-current[data-type="ready"] {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.identity-current[data-type="error"] {
+  color: var(--x-color);
+  font-weight: 700;
+}
+
+.identity-form {
+  display: flex;
+  gap: 8px;
+  align-items: end;
+}
+
+.identity-form input {
+  width: 180px;
+  padding: 10px 12px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.identity-form input:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
 /* Controls */
 .controls {
   display: grid;
@@ -67,6 +139,23 @@ h1 {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 12px;
+}
+
+.local-name-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.local-name-row input {
+  padding: 10px 12px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
 }
 
 label {
@@ -237,6 +326,62 @@ button[type="submit"]:active {
   touch-action: manipulation;
 }
 
+.leaderboard-section {
+  margin-top: 20px;
+  padding: 16px 20px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.leaderboard-section h2 {
+  margin-bottom: 12px;
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.leaderboard-list {
+  display: grid;
+  gap: 8px;
+}
+
+.leaderboard-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.95rem;
+}
+
+.leaderboard-row:last-child {
+  border-bottom: none;
+}
+
+.leaderboard-empty {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.secondary-btn {
+  margin-top: 12px;
+  padding: 8px 14px;
+  background: transparent;
+  color: var(--muted);
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.secondary-btn:hover,
+.secondary-btn:focus-visible {
+  color: var(--text);
+  border-color: var(--accent);
+  outline: none;
+}
+
 /* Ghost mark on hover via board data attribute */
 .board[data-current-player="X"] .cell:not(:disabled):not([data-mark]):hover::after {
   content: "X";
@@ -315,6 +460,23 @@ button[type="submit"]:active {
 
   button[type="submit"] {
     grid-column: 1 / -1;
+  }
+
+  .identity-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .identity-form {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .identity-form input {
+    width: 100%;
+  }
+
+  .local-name-row {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -472,12 +634,28 @@ button[type="submit"]:active {
 }
 
 /* Online game */
-.online-player-badge {
+.online-game-header {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: center;
   margin-bottom: 10px;
+}
+
+.online-room-code {
+  justify-self: center;
+  color: var(--accent);
+  font-family: monospace;
+  font-size: 1rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.online-player-badge {
   color: var(--muted);
   font-size: 1rem;
   font-weight: 700;
-  text-align: center;
+  text-align: right;
 }
 
 .online-player-badge strong {
@@ -493,8 +671,6 @@ button[type="submit"]:active {
 }
 
 .leave-btn {
-  display: block;
-  margin: 14px auto 0;
   padding: 8px 20px;
   background: transparent;
   color: var(--muted);
@@ -522,5 +698,17 @@ button[type="submit"]:active {
 
   .lobby-divider {
     padding-top: 0;
+  }
+
+  .online-game-header {
+    grid-template-columns: 1fr;
+  }
+
+  .online-room-code {
+    justify-self: center;
+  }
+
+  .online-player-badge {
+    text-align: center;
   }
 }

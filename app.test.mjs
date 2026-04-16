@@ -1,5 +1,6 @@
 import assert from "assert";
 
+import { createMemoryLeaderboardStore } from "./leaderboard-store.js";
 import {
   checkWinner,
   createEmptyBoard,
@@ -7,14 +8,32 @@ import {
   isValidSettings,
   placeMark,
 } from "./game-logic.js";
+import {
+  createEmptyLocalStats,
+  recordLocalDraw,
+  recordLocalWin,
+} from "./public/local-stats.js";
+import { formatOnlineRoomCode, getOnlineVisibilityState } from "./public/online-view.js";
+import { normalizeUsername, validateUsername } from "./public/username.js";
 import { createRoomStore } from "./room-state.js";
 
 let passed = 0;
 let failed = 0;
+const tests = [];
 
 function test(name, fn) {
+  tests.push({ name, fn });
+}
+
+async function runTests() {
+  for (const { name, fn } of tests) {
+    await runTest(name, fn);
+  }
+}
+
+async function runTest(name, fn) {
   try {
-    fn();
+    await fn();
     console.log(`  ✓  ${name}`);
     passed++;
   } catch (err) {
@@ -181,19 +200,28 @@ test("detects a draw when every cell is filled without a winner", () => {
 test("creates a room, starts both players on join, and rejects a third player", () => {
   const rooms = createRoomStore({ generateCode: () => "abc123" });
 
-  const created = rooms.createRoom({ socketId: "socket-a", size: 3, winLength: 3 });
+  const created = rooms.createRoom({
+    socketId: "socket-a",
+    username: "Ben",
+    size: 3,
+    winLength: 3,
+  });
   assert.equal(created.ok, true);
   assert.equal(created.code, "ABC123");
 
-  const joined = rooms.joinRoom({ socketId: "socket-b", code: "abc123" });
+  const joined = rooms.joinRoom({
+    socketId: "socket-b",
+    username: "Alex",
+    code: "abc123",
+  });
   assert.equal(joined.ok, true);
   assert.deepEqual(joined.players, [
-    { socketId: "socket-a", player: "X" },
-    { socketId: "socket-b", player: "O" },
+    { socketId: "socket-a", username: "Ben", player: "X", mark: "X" },
+    { socketId: "socket-b", username: "Alex", player: "O", mark: "O" },
   ]);
   assert.equal(joined.room.board.length, 3);
 
-  assert.deepEqual(rooms.joinRoom({ socketId: "socket-c", code: "ABC123" }), {
+  assert.deepEqual(rooms.joinRoom({ socketId: "socket-c", username: "Cara", code: "ABC123" }), {
     ok: false,
     message: "Room is full.",
   });
@@ -201,8 +229,17 @@ test("creates a room, starts both players on join, and rejects a third player", 
 
 test("validates turns and returns winner updates after online moves", () => {
   const rooms = createRoomStore({ generateCode: () => "WIN001" });
-  rooms.createRoom({ socketId: "x-player", size: 3, winLength: 3 });
-  rooms.joinRoom({ socketId: "o-player", code: "WIN001" });
+  rooms.createRoom({
+    socketId: "x-player",
+    username: "Ben",
+    size: 3,
+    winLength: 3,
+  });
+  rooms.joinRoom({
+    socketId: "o-player",
+    username: "Alex",
+    code: "WIN001",
+  });
 
   assert.deepEqual(rooms.makeMove({ socketId: "o-player", row: 0, col: 0 }), {
     ok: false,
@@ -233,7 +270,197 @@ test("validates turns and returns winner updates after online moves", () => {
   });
 });
 
+test("returns online result metadata when a game ends", () => {
+  const rooms = createRoomStore({ generateCode: () => "WIN002" });
+  rooms.createRoom({
+    socketId: "x-player",
+    username: "Ben",
+    size: 3,
+    winLength: 3,
+  });
+  rooms.joinRoom({
+    socketId: "o-player",
+    username: "Alex",
+    code: "WIN002",
+  });
+
+  rooms.makeMove({ socketId: "x-player", row: 0, col: 0 });
+  rooms.makeMove({ socketId: "o-player", row: 1, col: 0 });
+  rooms.makeMove({ socketId: "x-player", row: 0, col: 1 });
+  rooms.makeMove({ socketId: "o-player", row: 1, col: 1 });
+  const winningMove = rooms.makeMove({ socketId: "x-player", row: 0, col: 2 });
+
+  assert.deepEqual(winningMove.gameResult, {
+    type: "win",
+    winnerUsername: "Ben",
+    loserUsername: "Alex",
+    players: [
+      { username: "Ben", mark: "X" },
+      { username: "Alex", mark: "O" },
+    ],
+  });
+});
+
+// -- Online view state --------------------------------------------------------
+
+test("uses a dedicated online board view after game start", () => {
+  assert.deepEqual(getOnlineVisibilityState("game"), {
+    pageView: "online-game",
+    lobbyHidden: true,
+    gameHidden: false,
+  });
+});
+
+test("returns to the online lobby view from the board view", () => {
+  assert.deepEqual(getOnlineVisibilityState("lobby"), {
+    pageView: "online-lobby",
+    lobbyHidden: false,
+    gameHidden: true,
+  });
+});
+
+test("formats online room code for the game header", () => {
+  assert.equal(formatOnlineRoomCode("abc123"), "Room ABC123");
+  assert.equal(formatOnlineRoomCode(""), "Room");
+});
+
+// -- Username validation ------------------------------------------------------
+
+test("normalizes usernames for casual identity", () => {
+  assert.equal(normalizeUsername("  ben   lee  "), "ben lee");
+  assert.equal(normalizeUsername("ALEX_42"), "ALEX_42");
+  assert.equal(normalizeUsername("bad<script>"), "badscript");
+});
+
+test("validates username length and allowed characters", () => {
+  assert.deepEqual(validateUsername("Ben"), {
+    valid: true,
+    username: "Ben",
+    message: "",
+  });
+  assert.deepEqual(validateUsername("A"), {
+    valid: false,
+    username: "A",
+    message: "Name must be 2-20 characters.",
+  });
+  assert.deepEqual(validateUsername("a very very very long name"), {
+    valid: false,
+    username: "a very very very long name",
+    message: "Name must be 2-20 characters.",
+  });
+  assert.deepEqual(validateUsername("???"), {
+    valid: false,
+    username: "",
+    message: "Use letters, numbers, spaces, dashes, or underscores.",
+  });
+});
+
+// -- Local stats --------------------------------------------------------------
+
+test("records local wins and losses by username", () => {
+  const stats = createEmptyLocalStats();
+  recordLocalWin(stats, "Ben", "Guest");
+
+  assert.deepEqual(stats.players.Ben, {
+    wins: 1,
+    losses: 0,
+    draws: 0,
+  });
+  assert.deepEqual(stats.players.Guest, {
+    wins: 0,
+    losses: 1,
+    draws: 0,
+  });
+});
+
+test("records local draws for both players", () => {
+  const stats = createEmptyLocalStats();
+  recordLocalDraw(stats, "Ben", "Alex");
+
+  assert.deepEqual(stats.players.Ben, {
+    wins: 0,
+    losses: 0,
+    draws: 1,
+  });
+  assert.deepEqual(stats.players.Alex, {
+    wins: 0,
+    losses: 0,
+    draws: 1,
+  });
+});
+
+// -- Online leaderboard store -------------------------------------------------
+
+test("records online wins, losses, and draws", async () => {
+  const store = createMemoryLeaderboardStore();
+
+  await store.recordGameResult({
+    type: "win",
+    winnerUsername: "Ben",
+    loserUsername: "Alex",
+    players: [
+      { username: "Ben", mark: "X" },
+      { username: "Alex", mark: "O" },
+    ],
+  });
+
+  await store.recordGameResult({
+    type: "draw",
+    players: [
+      { username: "Ben", mark: "X" },
+      { username: "Alex", mark: "O" },
+    ],
+  });
+
+  assert.deepEqual(await store.getPlayer("Ben"), {
+    username: "Ben",
+    wins: 1,
+    losses: 0,
+    draws: 1,
+    gamesPlayed: 2,
+    winRate: 0.5,
+  });
+  assert.deepEqual(await store.getPlayer("Alex"), {
+    username: "Alex",
+    wins: 0,
+    losses: 1,
+    draws: 1,
+    gamesPlayed: 2,
+    winRate: 0,
+  });
+});
+
+test("sorts leaderboard by wins, win rate, games played, then username", async () => {
+  const store = createMemoryLeaderboardStore();
+
+  await store.recordGameResult({
+    type: "win",
+    winnerUsername: "Cara",
+    loserUsername: "Ben",
+    players: [
+      { username: "Cara", mark: "X" },
+      { username: "Ben", mark: "O" },
+    ],
+  });
+  await store.recordGameResult({
+    type: "win",
+    winnerUsername: "Alex",
+    loserUsername: "Ben",
+    players: [
+      { username: "Alex", mark: "X" },
+      { username: "Ben", mark: "O" },
+    ],
+  });
+
+  assert.deepEqual(
+    (await store.getLeaderboard({ limit: 3 })).map((row) => row.username),
+    ["Alex", "Cara", "Ben"],
+  );
+});
+
 // ── Summary ───────────────────────────────────────────────────────────────────
+
+await runTests();
 
 console.log(`\n${passed + failed} tests: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
