@@ -13,13 +13,58 @@ import {
   recordLocalDraw,
   recordLocalWin,
 } from "./public/local-stats.js";
-import { formatOnlineRoomCode, getOnlineVisibilityState } from "./public/online-view.js";
+import {
+  flipStatusMessage,
+  formatOnlineRoomCode,
+  getOnlineVisibilityState,
+} from "./public/online-view.js";
 import { normalizeUsername, validateUsername } from "./public/username.js";
 import { createRoomStore } from "./room-state.js";
 
 let passed = 0;
 let failed = 0;
 const tests = [];
+
+class FakeClassList {
+  constructor() {
+    this.classes = new Set();
+  }
+
+  add(className) {
+    this.classes.add(className);
+  }
+
+  remove(className) {
+    this.classes.delete(className);
+  }
+
+  contains(className) {
+    return this.classes.has(className);
+  }
+}
+
+class FakeStatusElement {
+  constructor() {
+    this.textContent = "";
+    this.dataset = {};
+    this.hidden = false;
+    this.classList = new FakeClassList();
+    this.listeners = {};
+  }
+
+  addEventListener(eventName, handler) {
+    this.listeners[eventName] = this.listeners[eventName] || [];
+    this.listeners[eventName].push(handler);
+  }
+
+  dispatchAnimationEnd() {
+    const handlers = this.listeners.animationend || [];
+    this.listeners.animationend = [];
+    for (const handler of handlers) {
+      handler();
+    }
+  }
+}
 
 function test(name, fn) {
   tests.push({ name, fn });
@@ -198,7 +243,7 @@ test("detects a draw when every cell is filled without a winner", () => {
 // ── Online room state ────────────────────────────────────────────────────────
 
 test("creates a room, starts both players on join, and rejects a third player", () => {
-  const rooms = createRoomStore({ generateCode: () => "abc123" });
+  const rooms = createRoomStore({ generateCode: () => "abc123", random: () => 0 });
 
   const created = rooms.createRoom({
     socketId: "socket-a",
@@ -227,8 +272,48 @@ test("creates a room, starts both players on join, and rejects a third player", 
   });
 });
 
+test("randomly assigns the first online starter when a room fills", () => {
+  const creatorStarts = createRoomStore({ generateCode: () => "RND001", random: () => 0 });
+  creatorStarts.createRoom({
+    socketId: "socket-a",
+    username: "Ben",
+    size: 3,
+    winLength: 3,
+  });
+  assert.deepEqual(
+    creatorStarts.joinRoom({
+      socketId: "socket-b",
+      username: "Alex",
+      code: "RND001",
+    }).players,
+    [
+      { socketId: "socket-a", username: "Ben", player: "X", mark: "X" },
+      { socketId: "socket-b", username: "Alex", player: "O", mark: "O" },
+    ],
+  );
+
+  const joinerStarts = createRoomStore({ generateCode: () => "RND002", random: () => 0.75 });
+  joinerStarts.createRoom({
+    socketId: "socket-a",
+    username: "Ben",
+    size: 3,
+    winLength: 3,
+  });
+  assert.deepEqual(
+    joinerStarts.joinRoom({
+      socketId: "socket-b",
+      username: "Alex",
+      code: "RND002",
+    }).players,
+    [
+      { socketId: "socket-a", username: "Ben", player: "O", mark: "O" },
+      { socketId: "socket-b", username: "Alex", player: "X", mark: "X" },
+    ],
+  );
+});
+
 test("validates turns and returns winner updates after online moves", () => {
-  const rooms = createRoomStore({ generateCode: () => "WIN001" });
+  const rooms = createRoomStore({ generateCode: () => "WIN001", random: () => 0 });
   rooms.createRoom({
     socketId: "x-player",
     username: "Ben",
@@ -271,7 +356,7 @@ test("validates turns and returns winner updates after online moves", () => {
 });
 
 test("returns online result metadata when a game ends", () => {
-  const rooms = createRoomStore({ generateCode: () => "WIN002" });
+  const rooms = createRoomStore({ generateCode: () => "WIN002", random: () => 0 });
   rooms.createRoom({
     socketId: "x-player",
     username: "Ben",
@@ -301,6 +386,71 @@ test("returns online result metadata when a game ends", () => {
   });
 });
 
+test("requires both online players to request a rematch before resetting", () => {
+  const randomValues = [0, 0.75];
+  const rooms = createRoomStore({
+    generateCode: () => "REM001",
+    random: () => (randomValues.length ? randomValues.shift() : 0),
+  });
+  rooms.createRoom({
+    socketId: "x-player",
+    username: "Ben",
+    size: 3,
+    winLength: 3,
+  });
+  rooms.joinRoom({
+    socketId: "o-player",
+    username: "Alex",
+    code: "REM001",
+  });
+
+  assert.deepEqual(rooms.requestRematch({ socketId: "x-player" }), {
+    ok: false,
+    message: "Game is not over.",
+  });
+
+  rooms.makeMove({ socketId: "x-player", row: 0, col: 0 });
+  rooms.makeMove({ socketId: "o-player", row: 1, col: 0 });
+  rooms.makeMove({ socketId: "x-player", row: 0, col: 1 });
+  rooms.makeMove({ socketId: "o-player", row: 1, col: 1 });
+  rooms.makeMove({ socketId: "x-player", row: 0, col: 2 });
+
+  assert.deepEqual(rooms.requestRematch({ socketId: "x-player" }), {
+    ok: true,
+    code: "REM001",
+    ready: false,
+    requestedBy: "x-player",
+  });
+
+  const rematch = rooms.requestRematch({ socketId: "o-player" });
+  assert.equal(rematch.ok, true);
+  assert.equal(rematch.ready, true);
+  assert.equal(rematch.code, "REM001");
+  assert.deepEqual(rematch.players, [
+    { socketId: "x-player", username: "Ben", player: "O", mark: "O" },
+    { socketId: "o-player", username: "Alex", player: "X", mark: "X" },
+  ]);
+  assert.deepEqual(rematch.update, {
+    board: [
+      ["", "", ""],
+      ["", "", ""],
+      ["", "", ""],
+    ],
+    currentPlayer: "X",
+    winner: null,
+    winningCells: [],
+    movesPlayed: 0,
+  });
+  assert.equal(rematch.room.size, 3);
+  assert.equal(rematch.room.winLength, 3);
+
+  assert.deepEqual(rooms.makeMove({ socketId: "x-player", row: 0, col: 0 }), {
+    ok: false,
+    message: "Not your turn.",
+  });
+  assert.equal(rooms.makeMove({ socketId: "o-player", row: 0, col: 0 }).ok, true);
+});
+
 // -- Online view state --------------------------------------------------------
 
 test("uses a dedicated online board view after game start", () => {
@@ -322,6 +472,19 @@ test("returns to the online lobby view from the board view", () => {
 test("formats online room code for the game header", () => {
   assert.equal(formatOnlineRoomCode("abc123"), "Room ABC123");
   assert.equal(formatOnlineRoomCode(""), "Room");
+});
+
+test("ignores stale status flip callbacks after a newer status update", () => {
+  const status = new FakeStatusElement();
+
+  flipStatusMessage(status, "You win!", "win-x");
+  flipStatusMessage(status, "Waiting for the other player to click Rematch...", "waiting");
+  flipStatusMessage(status, "Your turn", "x");
+  status.dispatchAnimationEnd();
+
+  assert.equal(status.textContent, "Your turn");
+  assert.equal(status.dataset.type, "x");
+  assert.equal(status.classList.contains("flip-out"), false);
 });
 
 // -- Username validation ------------------------------------------------------

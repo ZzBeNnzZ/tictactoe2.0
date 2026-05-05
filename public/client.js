@@ -1,5 +1,9 @@
 import { getCurrentUsername, initIdentity } from "./identity.js";
-import { formatOnlineRoomCode, getOnlineVisibilityState } from "./online-view.js";
+import {
+  flipStatusMessage,
+  formatOnlineRoomCode,
+  getOnlineVisibilityState,
+} from "./online-view.js";
 
 const socket = io();
 
@@ -27,6 +31,8 @@ const elOnlineStatus = document.querySelector("#online-status");
 const elPlayerBadge = document.querySelector("#online-player-badge");
 const elOnlineRoomCode = document.querySelector("#online-room-code");
 const elBtnLeave = document.querySelector("#btn-leave");
+const elRematchActions = document.querySelector("#online-rematch-actions");
+const elBtnRematch = document.querySelector("#btn-rematch");
 const elOnlineLeaderboard = document.querySelector("#online-leaderboard-list");
 const elRefreshLeaderboard = document.querySelector("#btn-refresh-leaderboard");
 const elBtnLobbyCreate = document.querySelector("#btn-lobby-create");
@@ -57,34 +63,6 @@ function fadeHidePanel(el, onDone) {
     el.hidden = true;
     if (onDone) onDone();
   }, { once: true });
-}
-
-function flipStatus(el, message, type, autoHide = false) {
-  if (!message) {
-    el.textContent = "";
-    el.dataset.type = "";
-    if (autoHide) el.hidden = true;
-    return;
-  }
-  if (el.textContent && !el.hidden && !el.classList.contains("flip-out")) {
-    el.classList.remove("flip-in");
-    el.classList.add("flip-out");
-    el.addEventListener("animationend", () => {
-      el.textContent = message;
-      el.dataset.type = type || "";
-      el.hidden = false;
-      el.classList.remove("flip-out");
-      el.classList.add("flip-in");
-      el.addEventListener("animationend", () => el.classList.remove("flip-in"), { once: true });
-    }, { once: true });
-  } else {
-    el.classList.remove("flip-out");
-    el.textContent = message;
-    el.dataset.type = type || "";
-    el.hidden = false;
-    el.classList.add("flip-in");
-    el.addEventListener("animationend", () => el.classList.remove("flip-in"), { once: true });
-  }
 }
 
 function triggerRipple(cell, player) {
@@ -181,6 +159,16 @@ elBtnLeave.addEventListener("click", () => {
   showLobby();
 });
 
+elBtnRematch.addEventListener("click", () => {
+  if (!gameState || !gameState.winner) {
+    return;
+  }
+
+  elBtnRematch.disabled = true;
+  setOnlineStatus("Waiting for the other player to click Rematch...", "waiting");
+  socket.emit("request-rematch");
+});
+
 elRefreshLeaderboard.addEventListener("click", () => {
   loadOnlineLeaderboard();
 });
@@ -240,6 +228,7 @@ socket.on("game-start", ({ player, size, board, code }) => {
   elPlayerBadge.innerHTML = `You are <strong>${player}</strong>`;
   elOnlineRoomCode.textContent = formatOnlineRoomCode(currentRoomCode);
 
+  hideRematchControls();
   showGame();
   buildOnlineBoard(size);
   renderOnlineBoard();
@@ -252,6 +241,7 @@ socket.on("game-update", (update) => {
 
   if (update.winner === "draw") {
     setOnlineStatus("Draw game", "draw");
+    showRematchControls();
     loadOnlineLeaderboard();
     return;
   }
@@ -259,6 +249,7 @@ socket.on("game-update", (update) => {
   if (update.winner) {
     const youWon = update.winner === myPlayer;
     setOnlineStatus(youWon ? "You win!" : `Player ${update.winner} wins`, `win-${update.winner.toLowerCase()}`);
+    showRematchControls();
     triggerConfetti(elOnlineBoard);
     loadOnlineLeaderboard();
     return;
@@ -268,8 +259,29 @@ socket.on("game-update", (update) => {
   setOnlineStatus(yourTurn ? "Your turn" : `Player ${update.currentPlayer}'s turn`, update.currentPlayer.toLowerCase());
 });
 
+socket.on("rematch-requested", ({ requestedBy } = {}) => {
+  showRematchControls();
+
+  if (requestedBy === socket.id) {
+    elBtnRematch.disabled = true;
+    setOnlineStatus("Waiting for the other player to click Rematch...", "waiting");
+    return;
+  }
+
+  elBtnRematch.disabled = false;
+  setOnlineStatus("Opponent wants a rematch. Click Rematch to start again.", "waiting");
+});
+
+socket.on("rematch-error", ({ message }) => {
+  if (gameState && gameState.winner) {
+    elBtnRematch.disabled = false;
+  }
+  setOnlineStatus(message, "error");
+});
+
 socket.on("opponent-disconnected", () => {
   setOnlineStatus("Opponent disconnected", "draw");
+  hideRematchControls();
   for (const cell of elOnlineBoard.querySelectorAll(".cell")) {
     cell.disabled = true;
   }
@@ -350,6 +362,7 @@ function showLobby() {
   gameState = null;
   currentRoomCode = "";
   elOnlineRoomCode.textContent = "";
+  hideRematchControls();
   elBtnLobbyCreate.classList.remove("active");
   elBtnLobbyJoin.classList.remove("active");
   elLobbyCreatePanel.hidden = true;
@@ -382,11 +395,21 @@ function applyOnlineView(view) {
 }
 
 function setLobbyStatus(message, type) {
-  flipStatus(elLobbyStatus, message, type, true);
+  flipStatusMessage(elLobbyStatus, message, type, { autoHide: true });
 }
 
 function setOnlineStatus(message, type) {
-  flipStatus(elOnlineStatus, message, type);
+  flipStatusMessage(elOnlineStatus, message, type);
+}
+
+function showRematchControls() {
+  elRematchActions.hidden = false;
+  elBtnRematch.disabled = false;
+}
+
+function hideRematchControls() {
+  elRematchActions.hidden = true;
+  elBtnRematch.disabled = false;
 }
 
 async function loadOnlineLeaderboard() {

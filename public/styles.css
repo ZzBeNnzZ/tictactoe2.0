@@ -775,6 +775,41 @@ button[type="submit"]:active {
   outline: none;
 }
 
+.online-rematch-actions {
+  display: flex;
+  justify-content: center;
+  margin: 10px 0 14px;
+}
+
+.online-rematch-actions[hidden] {
+  display: none;
+}
+
+.rematch-btn {
+  padding: 10px 22px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    opacity 0.15s;
+}
+
+.rematch-btn:hover,
+.rematch-btn:focus-visible {
+  background: var(--accent-hover);
+  outline: none;
+}
+
+.rematch-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 @media (max-width: 600px) {
   .online-game-header {
     grid-template-columns: 1fr;

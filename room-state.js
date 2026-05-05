@@ -14,13 +14,21 @@ function playerForIndex(index) {
 }
 
 function playerToAssignment(player, index) {
-  const mark = playerForIndex(index);
+  const mark = player.mark || playerForIndex(index);
   return {
     socketId: player.socketId,
     username: player.username,
     player: mark,
     mark,
   };
+}
+
+function assignRandomMarks(room, random) {
+  const xPlayerIndex = random() < 0.5 ? 0 : 1;
+
+  room.players.forEach((player, index) => {
+    player.mark = index === xPlayerIndex ? "X" : "O";
+  });
 }
 
 function buildUpdate(room) {
@@ -57,7 +65,7 @@ function buildGameResult(room) {
   };
 }
 
-export function createRoomStore({ generateCode = defaultGenerateCode } = {}) {
+export function createRoomStore({ generateCode = defaultGenerateCode, random = Math.random } = {}) {
   const rooms = new Map();
   const socketRooms = new Map();
 
@@ -99,6 +107,7 @@ export function createRoomStore({ generateCode = defaultGenerateCode } = {}) {
       movesPlayed: 0,
       size,
       winLength,
+      rematchRequests: new Set(),
     };
 
     rooms.set(code, room);
@@ -130,6 +139,7 @@ export function createRoomStore({ generateCode = defaultGenerateCode } = {}) {
       username: usernameValidation.username,
       mark: playerForIndex(room.players.length),
     });
+    assignRandomMarks(room, random);
     socketRooms.set(socketId, room.code);
 
     return {
@@ -201,6 +211,52 @@ export function createRoomStore({ generateCode = defaultGenerateCode } = {}) {
     };
   }
 
+  function requestRematch({ socketId }) {
+    const code = socketRooms.get(socketId);
+    const room = rooms.get(code);
+
+    if (!room || !room.players.some((player) => player.socketId === socketId)) {
+      return { ok: false, message: "Room not found." };
+    }
+
+    if (room.players.length < 2) {
+      return { ok: false, message: "Waiting for opponent." };
+    }
+
+    if (!room.winner) {
+      return { ok: false, message: "Game is not over." };
+    }
+
+    room.rematchRequests.add(socketId);
+
+    if (room.rematchRequests.size < 2) {
+      return {
+        ok: true,
+        code: room.code,
+        ready: false,
+        requestedBy: socketId,
+      };
+    }
+
+    assignRandomMarks(room, random);
+    room.board = createEmptyBoard(room.size);
+    room.currentPlayer = "X";
+    room.winner = null;
+    room.winningCells = [];
+    room.movesPlayed = 0;
+    room.rematchRequests.clear();
+
+    return {
+      ok: true,
+      code: room.code,
+      ready: true,
+      requestedBy: socketId,
+      room,
+      players: room.players.map(playerToAssignment),
+      update: buildUpdate(room),
+    };
+  }
+
   function disconnect(socketId) {
     const code = socketRooms.get(socketId);
     const room = rooms.get(code);
@@ -229,6 +285,7 @@ export function createRoomStore({ generateCode = defaultGenerateCode } = {}) {
     createRoom,
     joinRoom,
     makeMove,
+    requestRematch,
     disconnect,
   };
 }

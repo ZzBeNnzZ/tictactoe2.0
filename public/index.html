@@ -26,217 +26,239 @@
       </div>
 
       <div class="mode-panels">
-      <div id="local-mode">
-        <div class="local-name-row" aria-label="Local player names">
-          <label for="local-player-x-name">
-            Player X name
-            <input
-              id="local-player-x-name"
-              type="text"
-              maxlength="20"
-              placeholder="Player X"
-              autocomplete="off"
-            />
-          </label>
-          <label for="local-player-o-name">
-            Player O name
-            <input
-              id="local-player-o-name"
-              type="text"
-              maxlength="20"
-              placeholder="Player O"
-              autocomplete="off"
-            />
-          </label>
-        </div>
-
-        <form class="controls" id="settings-form">
-          <label for="board-size">
-            Board size
-            <input
-              id="board-size"
-              name="board-size"
-              type="number"
-              min="3"
-              max="20"
-              value="10"
-              inputmode="numeric"
-            />
-          </label>
-          <label for="win-length">
-            In a row to win
-            <input
-              id="win-length"
-              name="win-length"
-              type="number"
-              min="3"
-              value="5"
-              inputmode="numeric"
-            />
-          </label>
-          <button type="submit">New Game</button>
-        </form>
-
-        <div class="scoreboard" aria-label="Score">
-          <div class="score-card player-x" id="score-card-x">
-            <span class="player-label">Player X</span>
-            <span class="score" id="score-x">0</span>
-          </div>
-          <div class="score-divider">vs</div>
-          <div class="score-card player-o" id="score-card-o">
-            <span class="player-label">Player O</span>
-            <span class="score" id="score-o">0</span>
-          </div>
-          <div class="turn-indicator" id="turn-indicator"></div>
-        </div>
-
-        <p
-          class="status"
-          id="local-status"
-          role="status"
-          aria-live="polite"
-        ></p>
-
-        <section class="board-wrap" aria-label="Game board">
-          <div class="board" id="local-board"></div>
-        </section>
-
-        <section
-          class="leaderboard-section"
-          aria-labelledby="local-stats-heading"
-        >
-          <div class="leaderboard-header">
-            <h2 id="local-stats-heading">🏆 High Scores</h2>
-          </div>
-          <div class="leaderboard-list" id="local-stats-list"></div>
-        </section>
-      </div>
-
-      <div id="online-mode" hidden>
-        <section class="identity-panel" aria-labelledby="identity-heading">
-          <div>
-            <h2 id="identity-heading">Player name</h2>
-            <p class="identity-copy">
-              Your name is remembered on this computer.
-            </p>
-          </div>
-          <form class="identity-form" id="identity-form">
-            <label for="username-input">
-              Name
+        <div id="local-mode">
+          <div class="local-name-row" aria-label="Local player names">
+            <label for="local-player-x-name">
+              Player X name
               <input
-                id="username-input"
-                name="username"
+                id="local-player-x-name"
                 type="text"
                 maxlength="20"
-                autocomplete="nickname"
-                placeholder="Enter your name"
+                placeholder="Player X"
+                autocomplete="off"
               />
             </label>
-            <button type="submit">Use name</button>
-          </form>
-          <p class="identity-current" id="identity-current" role="status"></p>
-        </section>
-
-        <div id="online-lobby">
-          <div class="lobby-action-toggle" role="group" aria-label="Lobby action">
-            <button class="lobby-action-btn" id="btn-lobby-create" type="button">Create a Room</button>
-            <button class="lobby-action-btn" id="btn-lobby-join" type="button">Join a Room</button>
-          </div>
-
-          <div class="lobby-section" id="lobby-create-panel" hidden>
-            <h2 class="lobby-heading">Create a room</h2>
-            <form class="controls" id="online-settings-form">
-              <label for="online-board-size">
-                Board size
-                <input
-                  id="online-board-size"
-                  type="number"
-                  min="3"
-                  max="20"
-                  value="10"
-                  inputmode="numeric"
-                />
-              </label>
-              <label for="online-win-length">
-                In a row to win
-                <input
-                  id="online-win-length"
-                  type="number"
-                  min="3"
-                  value="5"
-                  inputmode="numeric"
-                />
-              </label>
-              <button type="submit">Create Room</button>
-            </form>
-            <div id="room-created-info" hidden>
-              <p class="lobby-waiting">Share this code with your opponent:</p>
-              <p class="room-code" id="room-code-display"></p>
-              <p class="lobby-waiting">Waiting for opponent to join...</p>
-            </div>
-          </div>
-
-          <div class="lobby-section" id="lobby-join-panel" hidden>
-            <h2 class="lobby-heading">Join a room</h2>
-            <form class="join-form" id="join-form">
+            <label for="local-player-o-name">
+              Player O name
               <input
-                id="join-code-input"
+                id="local-player-o-name"
                 type="text"
-                maxlength="6"
-                placeholder="Enter room code"
+                maxlength="20"
+                placeholder="Player O"
                 autocomplete="off"
-                spellcheck="false"
               />
-              <button type="submit">Join</button>
-            </form>
+            </label>
+          </div>
+
+          <form class="controls" id="settings-form">
+            <label for="board-size">
+              Board size
+              <input
+                id="board-size"
+                name="board-size"
+                type="number"
+                min="3"
+                max="20"
+                value="10"
+                inputmode="numeric"
+              />
+            </label>
+            <label for="win-length">
+              In a row to win
+              <input
+                id="win-length"
+                name="win-length"
+                type="number"
+                min="3"
+                value="5"
+                inputmode="numeric"
+              />
+            </label>
+            <button type="submit">New Game</button>
+          </form>
+
+          <div class="scoreboard" aria-label="Score">
+            <div class="score-card player-x" id="score-card-x">
+              <span class="player-label">Player X</span>
+              <span class="score" id="score-x">0</span>
+            </div>
+            <div class="score-divider">vs</div>
+            <div class="score-card player-o" id="score-card-o">
+              <span class="player-label">Player O</span>
+              <span class="score" id="score-o">0</span>
+            </div>
+            <div class="turn-indicator" id="turn-indicator"></div>
           </div>
 
           <p
             class="status"
-            id="lobby-status"
+            id="local-status"
             role="status"
             aria-live="polite"
-            hidden
           ></p>
-        </div>
 
-        <div id="online-game" hidden>
-          <div class="online-game-header">
-            <button class="leave-btn" id="btn-leave" type="button">
-              Back to lobby
-            </button>
-            <p class="online-room-code" id="online-room-code"></p>
-            <div class="online-player-badge" id="online-player-badge"></div>
-          </div>
-          <p
-            class="status"
-            id="online-status"
-            role="status"
-            aria-live="polite"
-          ></p>
           <section class="board-wrap" aria-label="Game board">
-            <div class="board" id="online-board"></div>
+            <div class="board" id="local-board"></div>
+          </section>
+
+          <section
+            class="leaderboard-section"
+            aria-labelledby="local-stats-heading"
+          >
+            <div class="leaderboard-header">
+              <h2 id="local-stats-heading">🏆 High Scores</h2>
+            </div>
+            <div class="leaderboard-list" id="local-stats-list"></div>
           </section>
         </div>
 
-        <section
-          class="leaderboard-section"
-          aria-labelledby="online-leaderboard-heading"
-        >
-          <div class="leaderboard-header">
-            <h2 id="online-leaderboard-heading">🏆 Leaderboard</h2>
-            <button
-              class="secondary-btn"
-              id="btn-refresh-leaderboard"
-              type="button"
+        <div id="online-mode" hidden>
+          <section class="identity-panel" aria-labelledby="identity-heading">
+            <div>
+              <h2 id="identity-heading">Player name</h2>
+              <p class="identity-copy">
+                Your name is remembered on this computer.
+              </p>
+            </div>
+            <form class="identity-form" id="identity-form">
+              <label for="username-input">
+                Name
+                <input
+                  id="username-input"
+                  name="username"
+                  type="text"
+                  maxlength="20"
+                  autocomplete="nickname"
+                  placeholder="Enter your name"
+                />
+              </label>
+              <button type="submit">Use name</button>
+            </form>
+            <p class="identity-current" id="identity-current" role="status"></p>
+          </section>
+
+          <div id="online-lobby">
+            <div
+              class="lobby-action-toggle"
+              role="group"
+              aria-label="Lobby action"
             >
-              Refresh
-            </button>
+              <button
+                class="lobby-action-btn"
+                id="btn-lobby-create"
+                type="button"
+              >
+                Create a Room
+              </button>
+              <button
+                class="lobby-action-btn"
+                id="btn-lobby-join"
+                type="button"
+              >
+                Join a Room
+              </button>
+            </div>
+
+            <div class="lobby-section" id="lobby-create-panel" hidden>
+              <h2 class="lobby-heading">Create a room</h2>
+              <form class="controls" id="online-settings-form">
+                <label for="online-board-size">
+                  Board size
+                  <input
+                    id="online-board-size"
+                    type="number"
+                    min="3"
+                    max="20"
+                    value="10"
+                    inputmode="numeric"
+                  />
+                </label>
+                <label for="online-win-length">
+                  In a row to win
+                  <input
+                    id="online-win-length"
+                    type="number"
+                    min="3"
+                    value="5"
+                    inputmode="numeric"
+                  />
+                </label>
+                <button type="submit">Create Room</button>
+              </form>
+              <div id="room-created-info" hidden>
+                <p class="lobby-waiting">Share this code with your opponent:</p>
+                <p class="room-code" id="room-code-display"></p>
+                <p class="lobby-waiting">Waiting for opponent to join...</p>
+              </div>
+            </div>
+
+            <div class="lobby-section" id="lobby-join-panel" hidden>
+              <h2 class="lobby-heading">Join a room</h2>
+              <form class="join-form" id="join-form">
+                <input
+                  id="join-code-input"
+                  type="text"
+                  maxlength="6"
+                  placeholder="Enter room code"
+                  autocomplete="off"
+                  spellcheck="false"
+                />
+                <button type="submit">Join</button>
+              </form>
+            </div>
+
+            <p
+              class="status"
+              id="lobby-status"
+              role="status"
+              aria-live="polite"
+              hidden
+            ></p>
           </div>
-          <div class="leaderboard-list" id="online-leaderboard-list"></div>
-        </section>
+
+          <div id="online-game" hidden>
+            <div class="online-game-header">
+              <button class="leave-btn" id="btn-leave" type="button">
+                Back to lobby
+              </button>
+              <p class="online-room-code" id="online-room-code"></p>
+              <div class="online-player-badge" id="online-player-badge"></div>
+            </div>
+            <p
+              class="status"
+              id="online-status"
+              role="status"
+              aria-live="polite"
+            ></p>
+            <div class="online-rematch-actions" id="online-rematch-actions" hidden>
+              <button class="rematch-btn" id="btn-rematch" type="button">
+                Rematch
+              </button>
+            </div>
+            <section class="board-wrap" aria-label="Game board">
+              <div class="board" id="online-board"></div>
+            </section>
+          </div>
+
+          <section
+            class="leaderboard-section"
+            aria-labelledby="online-leaderboard-heading"
+          >
+            <div class="leaderboard-header">
+              <h2 id="online-leaderboard-heading">🏆 Leaderboard</h2>
+              <button
+                class="secondary-btn"
+                id="btn-refresh-leaderboard"
+                type="button"
+              >
+                Refresh
+              </button>
+            </div>
+            <div class="leaderboard-list" id="online-leaderboard-list"></div>
+          </section>
+        </div>
       </div>
-      </div><!-- /.mode-panels -->
+      <!-- /.mode-panels -->
     </main>
 
     <script type="module" src="app.js"></script>

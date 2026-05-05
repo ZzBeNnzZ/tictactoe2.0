@@ -30,6 +30,19 @@ app.get("/api/leaderboard/:username", async (req, res) => {
 app.use(express.static(join(__dirname, "public")));
 
 io.on("connection", (socket) => {
+  function emitGameStart(result) {
+    for (const assignment of result.players) {
+      io.to(assignment.socketId).emit("game-start", {
+        code: result.code,
+        player: assignment.player,
+        size: result.room.size,
+        winLength: result.room.winLength,
+        board: result.room.board,
+        players: result.players.map(({ username, mark }) => ({ username, mark })),
+      });
+    }
+  }
+
   socket.on("create-room", ({ size, winLength, username } = {}) => {
     const result = rooms.createRoom({
       socketId: socket.id,
@@ -54,17 +67,7 @@ io.on("connection", (socket) => {
     }
 
     socket.join(result.code);
-
-    for (const assignment of result.players) {
-      io.to(assignment.socketId).emit("game-start", {
-        code: result.code,
-        player: assignment.player,
-        size: result.room.size,
-        winLength: result.room.winLength,
-        board: result.room.board,
-        players: result.players.map(({ username, mark }) => ({ username, mark })),
-      });
-    }
+    emitGameStart(result);
   });
 
   socket.on("make-move", async ({ row, col } = {}) => {
@@ -82,6 +85,21 @@ io.on("connection", (socket) => {
     }
 
     io.to(result.code).emit("game-update", result.update);
+  });
+
+  socket.on("request-rematch", () => {
+    const result = rooms.requestRematch({ socketId: socket.id });
+    if (!result.ok) {
+      socket.emit("rematch-error", { message: result.message });
+      return;
+    }
+
+    if (!result.ready) {
+      io.to(result.code).emit("rematch-requested", { requestedBy: result.requestedBy });
+      return;
+    }
+
+    emitGameStart(result);
   });
 
   socket.on("disconnect", () => {
