@@ -11,6 +11,12 @@ let myPlayer = null;
 let gameState = null;
 let gameSize = 10;
 let currentRoomCode = "";
+let myReconnectToken = null;
+let countdownInterval = null;
+let isSocketReconnecting = false;
+
+const SESSION_KEY = "ttt_session";
+const SESSION_MAX_AGE = 5 * 60 * 1000;
 
 const elBtnLocal = document.querySelector("#btn-mode-local");
 const elBtnOnline = document.querySelector("#btn-mode-online");
@@ -39,9 +45,52 @@ const elBtnLobbyCreate = document.querySelector("#btn-lobby-create");
 const elBtnLobbyJoin = document.querySelector("#btn-lobby-join");
 const elLobbyCreatePanel = document.querySelector("#lobby-create-panel");
 const elLobbyJoinPanel = document.querySelector("#lobby-join-panel");
+const elRejoinBanner = document.querySelector("#rejoin-banner");
+const elBtnRejoin = document.querySelector("#btn-rejoin");
+const elBtnRejoinDismiss = document.querySelector("#btn-rejoin-dismiss");
+const elReconnectingOverlay = document.querySelector("#reconnecting-overlay");
 
 initIdentity();
 loadOnlineLeaderboard();
+
+// --- Session helpers ---
+
+function generateToken() {
+  return Array.from(crypto.getRandomValues(new Uint8Array(16)))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function saveSession(roomCode, token) {
+  try {
+    localStorage.setItem(SESSION_KEY, JSON.stringify({ roomCode, token, timestamp: Date.now() }));
+  } catch {
+    // localStorage unavailable — rejoin won't work but game still plays
+  }
+}
+
+function loadSession() {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const session = JSON.parse(raw);
+    if (Date.now() - session.timestamp > SESSION_MAX_AGE) {
+      clearSession();
+      return null;
+    }
+    return session;
+  } catch {
+    return null;
+  }
+}
+
+function clearSession() {
+  try {
+    localStorage.removeItem(SESSION_KEY);
+  } catch {
+    // ignore
+  }
+}
 
 // --- Animation helpers ---
 
@@ -104,6 +153,8 @@ function triggerConfetti(boardEl) {
   setTimeout(() => container.remove(), 1600);
 }
 
+// --- Mode switching ---
+
 elBtnLocal.addEventListener("click", () => {
   if (!elLocalMode.hidden) return;
   elBtnLocal.classList.add("active");
@@ -122,6 +173,8 @@ elBtnOnline.addEventListener("click", () => {
   });
 });
 
+// --- Lobby actions ---
+
 elOnlineSettings.addEventListener("submit", (event) => {
   event.preventDefault();
   const size = Number(elOnlineBoardSize.value);
@@ -132,8 +185,9 @@ elOnlineSettings.addEventListener("submit", (event) => {
     return;
   }
 
+  myReconnectToken = generateToken();
   setLobbyStatus("", "");
-  socket.emit("create-room", { size, winLength, username });
+  socket.emit("create-room", { size, winLength, username, reconnectToken: myReconnectToken });
 });
 
 elJoinForm.addEventListener("submit", (event) => {
@@ -149,11 +203,14 @@ elJoinForm.addEventListener("submit", (event) => {
     return;
   }
 
+  myReconnectToken = generateToken();
   setLobbyStatus("", "");
-  socket.emit("join-room", { code, username });
+  socket.emit("join-room", { code, username, reconnectToken: myReconnectToken });
 });
 
 elBtnLeave.addEventListener("click", () => {
+  clearSession();
+  socket.emit("leave-room");
   socket.disconnect();
   socket.connect();
   showLobby();
@@ -197,14 +254,66 @@ elBtnLobbyJoin.addEventListener("click", () => {
   }
 });
 
+// --- Rejoin banner (page refresh scenario) ---
+
+elBtnRejoin.addEventListener("click", () => {
+  const session = loadSession();
+  if (!session) {
+    elRejoinBanner.hidden = true;
+    return;
+  }
+  elRejoinBanner.hidden = true;
+  socket.emit("rejoin-room", { code: session.roomCode, token: session.token });
+});
+
+elBtnRejoinDismiss.addEventListener("click", () => {
+  clearSession();
+  elRejoinBanner.hidden = true;
+});
+
 window.addEventListener("ttt:username-change", () => {
   loadOnlineLeaderboard();
+});
+
+// --- Socket events ---
+
+socket.on("connect", () => {
+  if (isSocketReconnecting) {
+    isSocketReconnecting = false;
+    const session = loadSession();
+    if (session) {
+      socket.emit("rejoin-room", { code: session.roomCode, token: session.token });
+    } else {
+      hideReconnectingOverlay();
+      showLobby();
+    }
+    return;
+  }
+
+  // Page load: check for a leftover session (e.g. page refresh mid-game)
+  if (!myPlayer) {
+    const session = loadSession();
+    if (session) {
+      elRejoinBanner.hidden = false;
+    }
+  }
+});
+
+socket.on("disconnect", () => {
+  if (myPlayer) {
+    isSocketReconnecting = true;
+    showReconnectingOverlay();
+  }
 });
 
 socket.on("room-created", ({ code }) => {
   currentRoomCode = code;
   elRoomCode.textContent = code;
   elRoomCreated.hidden = false;
+  // Save session so host can rejoin if they disconnect while waiting
+  if (myReconnectToken) {
+    saveSession(code, myReconnectToken);
+  }
   setLobbyStatus("Waiting for opponent...", "waiting");
 });
 
@@ -212,7 +321,7 @@ socket.on("room-error", ({ message }) => {
   setLobbyStatus(message, "error");
 });
 
-socket.on("game-start", ({ player, size, board, code }) => {
+socket.on("game-start", ({ player, size, board, code, players }) => {
   myPlayer = player;
   currentRoomCode = code || currentRoomCode;
   gameSize = size;
@@ -224,11 +333,16 @@ socket.on("game-start", ({ player, size, board, code }) => {
     movesPlayed: 0,
   };
 
+  if (myReconnectToken) {
+    saveSession(currentRoomCode, myReconnectToken);
+  }
+
   elPlayerBadge.className = `online-player-badge badge-${player.toLowerCase()}`;
   elPlayerBadge.innerHTML = `You are <strong>${player}</strong>`;
   elOnlineRoomCode.textContent = formatOnlineRoomCode(currentRoomCode);
 
   hideRematchControls();
+  stopCountdown();
   showGame();
   buildOnlineBoard(size);
   renderOnlineBoard();
@@ -279,13 +393,96 @@ socket.on("rematch-error", ({ message }) => {
   setOnlineStatus(message, "error");
 });
 
-socket.on("opponent-disconnected", () => {
-  setOnlineStatus("Opponent disconnected", "draw");
+socket.on("opponent-disconnected", ({ canRejoin, graceSeconds } = {}) => {
+  hideRematchControls();
+  for (const cell of elOnlineBoard.querySelectorAll(".cell")) {
+    cell.disabled = true;
+  }
+
+  if (canRejoin && graceSeconds) {
+    startCountdown(graceSeconds);
+  } else {
+    setOnlineStatus("Opponent disconnected", "draw");
+  }
+});
+
+socket.on("opponent-rejoined", () => {
+  stopCountdown();
+  if (!gameState) return;
+
+  if (gameState.winner) {
+    const youWon = gameState.winner === myPlayer;
+    if (gameState.winner === "draw") {
+      setOnlineStatus("Draw game — opponent rejoined", "draw");
+      showRematchControls();
+    } else {
+      setOnlineStatus(youWon ? "You win! (opponent rejoined)" : `Player ${gameState.winner} wins`, `win-${gameState.winner.toLowerCase()}`);
+      showRematchControls();
+    }
+    return;
+  }
+
+  const yourTurn = gameState.currentPlayer === myPlayer;
+  setOnlineStatus(yourTurn ? "Your turn" : `Player ${gameState.currentPlayer}'s turn`, gameState.currentPlayer.toLowerCase());
+  renderOnlineBoard();
+});
+
+socket.on("opponent-left-permanently", () => {
+  stopCountdown();
+  setOnlineStatus("Opponent left the game", "draw");
   hideRematchControls();
   for (const cell of elOnlineBoard.querySelectorAll(".cell")) {
     cell.disabled = true;
   }
 });
+
+socket.on("rejoin-success", ({ code, player, size, board, players, update }) => {
+  clearSession();
+  hideReconnectingOverlay();
+  elRejoinBanner.hidden = true;
+
+  myPlayer = player;
+  currentRoomCode = code;
+  gameSize = size;
+  gameState = update;
+
+  elPlayerBadge.className = `online-player-badge badge-${player.toLowerCase()}`;
+  elPlayerBadge.innerHTML = `You are <strong>${player}</strong>`;
+  elOnlineRoomCode.textContent = formatOnlineRoomCode(code);
+
+  hideRematchControls();
+  stopCountdown();
+  showGame();
+  buildOnlineBoard(size);
+  renderOnlineBoard();
+
+  if (update.winner) {
+    if (update.winner === "draw") {
+      setOnlineStatus("Draw game — you rejoined", "draw");
+      showRematchControls();
+    } else {
+      const youWon = update.winner === player;
+      setOnlineStatus(youWon ? "You win! (rejoined)" : `Player ${update.winner} wins`, `win-${update.winner.toLowerCase()}`);
+      showRematchControls();
+    }
+  } else {
+    const yourTurn = update.currentPlayer === player;
+    setOnlineStatus(yourTurn ? "Your turn" : `Player ${update.currentPlayer}'s turn — you rejoined`, update.currentPlayer.toLowerCase());
+  }
+});
+
+socket.on("rejoin-failed", ({ message } = {}) => {
+  clearSession();
+  hideReconnectingOverlay();
+  elRejoinBanner.hidden = true;
+  myPlayer = null;
+  gameState = null;
+  currentRoomCode = "";
+  showLobby();
+  setLobbyStatus(message || "Could not rejoin — room may have expired.", "error");
+});
+
+// --- Board ---
 
 function buildOnlineBoard(size) {
   elOnlineBoard.innerHTML = "";
@@ -354,15 +551,19 @@ function handleOnlineCellClick(row, col) {
   socket.emit("make-move", { row, col });
 }
 
+// --- View helpers ---
+
 function showLobby() {
   elRoomCreated.hidden = true;
   elJoinInput.value = "";
   setLobbyStatus("", "");
   myPlayer = null;
   gameState = null;
+  myReconnectToken = null;
   currentRoomCode = "";
   elOnlineRoomCode.textContent = "";
   hideRematchControls();
+  stopCountdown();
   elBtnLobbyCreate.classList.remove("active");
   elBtnLobbyJoin.classList.remove("active");
   elLobbyCreatePanel.hidden = true;
@@ -378,6 +579,7 @@ function showLobby() {
 }
 
 function showGame() {
+  elRejoinBanner.hidden = true;
   fadeHidePanel(elLobby, () => {
     document.body.dataset.view = "online-game";
     elOnlineGame.hidden = false;
@@ -392,6 +594,14 @@ function applyOnlineView(view) {
   document.body.dataset.view = state.pageView;
   elLobby.hidden = state.lobbyHidden;
   elOnlineGame.hidden = state.gameHidden;
+}
+
+function showReconnectingOverlay() {
+  elReconnectingOverlay.hidden = false;
+}
+
+function hideReconnectingOverlay() {
+  elReconnectingOverlay.hidden = true;
 }
 
 function setLobbyStatus(message, type) {
@@ -411,6 +621,33 @@ function hideRematchControls() {
   elRematchActions.hidden = true;
   elBtnRematch.disabled = false;
 }
+
+function startCountdown(seconds) {
+  stopCountdown();
+  let remaining = seconds;
+
+  function tick() {
+    if (remaining <= 0) {
+      setOnlineStatus("Opponent disconnected", "draw");
+      countdownInterval = null;
+      return;
+    }
+    setOnlineStatus(`Opponent disconnected — waiting to rejoin (${remaining}s)`, "waiting");
+    remaining -= 1;
+  }
+
+  tick();
+  countdownInterval = setInterval(tick, 1000);
+}
+
+function stopCountdown() {
+  if (countdownInterval !== null) {
+    clearInterval(countdownInterval);
+    countdownInterval = null;
+  }
+}
+
+// --- Leaderboard ---
 
 async function loadOnlineLeaderboard() {
   try {

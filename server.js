@@ -30,6 +30,9 @@ app.get("/api/leaderboard/:username", async (req, res) => {
 app.use(express.static(join(__dirname, "public")));
 
 io.on("connection", (socket) => {
+  // Tracks sockets that sent leave-room so the follow-up disconnect event is ignored.
+  let intentionalLeave = false;
+
   function emitGameStart(result) {
     for (const assignment of result.players) {
       io.to(assignment.socketId).emit("game-start", {
@@ -43,12 +46,13 @@ io.on("connection", (socket) => {
     }
   }
 
-  socket.on("create-room", ({ size, winLength, username } = {}) => {
+  socket.on("create-room", ({ size, winLength, username, reconnectToken } = {}) => {
     const result = rooms.createRoom({
       socketId: socket.id,
       username,
       size,
       winLength,
+      reconnectToken,
     });
     if (!result.ok) {
       socket.emit("room-error", { message: result.message });
@@ -59,8 +63,8 @@ io.on("connection", (socket) => {
     socket.emit("room-created", { code: result.code });
   });
 
-  socket.on("join-room", ({ code, username } = {}) => {
-    const result = rooms.joinRoom({ socketId: socket.id, username, code });
+  socket.on("join-room", ({ code, username, reconnectToken } = {}) => {
+    const result = rooms.joinRoom({ socketId: socket.id, username, code, reconnectToken });
     if (!result.ok) {
       socket.emit("room-error", { message: result.message });
       return;
@@ -102,14 +106,64 @@ io.on("connection", (socket) => {
     emitGameStart(result);
   });
 
-  socket.on("disconnect", () => {
-    const result = rooms.disconnect(socket.id);
+  // Intentional leave — bypasses grace period and permanently removes the room.
+  socket.on("leave-room", () => {
+    intentionalLeave = true;
+    const result = rooms.leaveRoom(socket.id);
     if (!result.ok) {
       return;
     }
 
     for (const opponentSocketId of result.opponentSocketIds) {
-      io.to(opponentSocketId).emit("opponent-disconnected");
+      io.to(opponentSocketId).emit("opponent-left-permanently");
+    }
+  });
+
+  // Player attempting to rejoin after disconnect/refresh within the grace period.
+  socket.on("rejoin-room", ({ code, token } = {}) => {
+    const result = rooms.rejoinRoom({ socketId: socket.id, token, code });
+    if (!result.ok) {
+      socket.emit("rejoin-failed", { message: result.message });
+      return;
+    }
+
+    socket.join(result.code);
+
+    socket.emit("rejoin-success", {
+      code: result.code,
+      player: result.player.mark,
+      size: result.room.size,
+      winLength: result.room.winLength,
+      board: result.room.board,
+      players: result.players.map(({ username, mark }) => ({ username, mark })),
+      update: result.update,
+    });
+
+    for (const opponentSocketId of result.opponentSocketIds) {
+      io.to(opponentSocketId).emit("opponent-rejoined");
+    }
+  });
+
+  socket.on("disconnect", () => {
+    if (intentionalLeave) {
+      return;
+    }
+
+    const result = rooms.disconnect(socket.id, (code, opponentSocketIds) => {
+      for (const opponentSocketId of opponentSocketIds) {
+        io.to(opponentSocketId).emit("opponent-left-permanently");
+      }
+    });
+
+    if (!result.ok) {
+      return;
+    }
+
+    for (const opponentSocketId of result.opponentSocketIds) {
+      io.to(opponentSocketId).emit("opponent-disconnected", {
+        canRejoin: result.canRejoin,
+        graceSeconds: 30,
+      });
     }
   });
 });

@@ -138,6 +138,14 @@
           </section>
 
           <div id="online-lobby">
+            <div id="rejoin-banner" class="rejoin-banner" hidden>
+              <p class="rejoin-banner-text">You were in a game. Attempting to reconnect&hellip;</p>
+              <div class="rejoin-banner-actions">
+                <button class="secondary-btn" id="btn-rejoin" type="button">Rejoin Room</button>
+                <button class="secondary-btn" id="btn-rejoin-dismiss" type="button">Dismiss</button>
+              </div>
+            </div>
+
             <div
               class="lobby-action-toggle"
               role="group"
@@ -217,6 +225,13 @@
           </div>
 
           <div id="online-game" hidden>
+            <div id="reconnecting-overlay" class="reconnecting-overlay" hidden>
+              <div class="reconnecting-content" role="status" aria-live="polite">
+                <div class="reconnecting-spinner"></div>
+                <p>Reconnecting&hellip;</p>
+              </div>
+            </div>
+
             <div class="online-game-header">
               <button class="leave-btn" id="btn-leave" type="button">
                 Back to lobby
