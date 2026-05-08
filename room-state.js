@@ -1,6 +1,8 @@
 import { checkWinner, createEmptyBoard, isDraw, isValidSettings } from "./game-logic.js";
 import { validateUsername } from "./public/username.js";
 
+const GRACE_PERIOD_MS = 30_000;
+
 function defaultGenerateCode() {
   return Math.random().toString(36).slice(2, 8).toUpperCase();
 }
@@ -79,7 +81,7 @@ export function createRoomStore({ generateCode = defaultGenerateCode, random = M
     throw new Error("Could not generate a unique room code.");
   }
 
-  function createRoom({ socketId, username, size, winLength }) {
+  function createRoom({ socketId, username, size, winLength, reconnectToken }) {
     const validation = isValidSettings(size, winLength);
     if (!validation.valid) {
       return { ok: false, message: validation.message };
@@ -98,6 +100,7 @@ export function createRoomStore({ generateCode = defaultGenerateCode, random = M
           socketId,
           username: usernameValidation.username,
           mark: "X",
+          reconnectToken: reconnectToken || null,
         },
       ],
       board: createEmptyBoard(size),
@@ -108,6 +111,7 @@ export function createRoomStore({ generateCode = defaultGenerateCode, random = M
       size,
       winLength,
       rematchRequests: new Set(),
+      disconnectedPlayers: new Map(),
     };
 
     rooms.set(code, room);
@@ -115,7 +119,7 @@ export function createRoomStore({ generateCode = defaultGenerateCode, random = M
     return { ok: true, code, room };
   }
 
-  function joinRoom({ socketId, username, code }) {
+  function joinRoom({ socketId, username, code, reconnectToken }) {
     const room = rooms.get(normalizeCode(code));
     if (!room) {
       return { ok: false, message: "Room not found." };
@@ -138,6 +142,7 @@ export function createRoomStore({ generateCode = defaultGenerateCode, random = M
       socketId,
       username: usernameValidation.username,
       mark: playerForIndex(room.players.length),
+      reconnectToken: reconnectToken || null,
     });
     assignRandomMarks(room, random);
     socketRooms.set(socketId, room.code);
@@ -257,7 +262,55 @@ export function createRoomStore({ generateCode = defaultGenerateCode, random = M
     };
   }
 
-  function disconnect(socketId) {
+  // Graceful disconnect: keeps room alive for GRACE_PERIOD_MS so player can rejoin.
+  // onExpire(code, opponentSocketIds) fires if they don't return in time.
+  function disconnect(socketId, onExpire) {
+    const code = socketRooms.get(socketId);
+    const room = rooms.get(code);
+
+    if (!room) {
+      socketRooms.delete(socketId);
+      return { ok: false };
+    }
+
+    const playerIndex = room.players.findIndex((p) => p.socketId === socketId);
+    if (playerIndex === -1) {
+      socketRooms.delete(socketId);
+      return { ok: false };
+    }
+
+    const player = room.players[playerIndex];
+    room.players.splice(playerIndex, 1);
+    socketRooms.delete(socketId);
+
+    const opponentSocketIds = room.players.map((p) => p.socketId);
+
+    if (player.reconnectToken) {
+      const timer = setTimeout(() => {
+        room.disconnectedPlayers.delete(player.reconnectToken);
+        if (room.players.length === 0 && room.disconnectedPlayers.size === 0) {
+          rooms.delete(code);
+        }
+        if (onExpire) onExpire(code, opponentSocketIds);
+      }, GRACE_PERIOD_MS);
+
+      room.disconnectedPlayers.set(player.reconnectToken, { ...player, timer });
+    } else {
+      if (room.players.length === 0 && room.disconnectedPlayers.size === 0) {
+        rooms.delete(code);
+      }
+    }
+
+    return {
+      ok: true,
+      code,
+      opponentSocketIds,
+      canRejoin: Boolean(player.reconnectToken),
+    };
+  }
+
+  // Immediate room deletion — used when a player intentionally clicks Leave.
+  function leaveRoom(socketId) {
     const code = socketRooms.get(socketId);
     const room = rooms.get(code);
 
@@ -267,17 +320,57 @@ export function createRoomStore({ generateCode = defaultGenerateCode, random = M
     }
 
     const opponentSocketIds = room.players
-      .filter((player) => player.socketId !== socketId)
-      .map((player) => player.socketId);
+      .filter((p) => p.socketId !== socketId)
+      .map((p) => p.socketId);
+
+    for (const [, dp] of room.disconnectedPlayers) {
+      clearTimeout(dp.timer);
+    }
     for (const player of room.players) {
       socketRooms.delete(player.socketId);
     }
     rooms.delete(code);
 
+    return { ok: true, code, opponentSocketIds };
+  }
+
+  function rejoinRoom({ socketId, token, code }) {
+    const normalizedCode = normalizeCode(code);
+    const room = rooms.get(normalizedCode);
+
+    if (!room) {
+      return { ok: false, message: "Room not found or has expired." };
+    }
+
+    const disconnected = room.disconnectedPlayers.get(token);
+    if (!disconnected) {
+      return { ok: false, message: "Rejoin token is invalid or has expired." };
+    }
+
+    clearTimeout(disconnected.timer);
+    room.disconnectedPlayers.delete(token);
+
+    const player = {
+      socketId,
+      username: disconnected.username,
+      mark: disconnected.mark,
+      reconnectToken: token,
+    };
+    room.players.push(player);
+    socketRooms.set(socketId, normalizedCode);
+
+    const opponentSocketIds = room.players
+      .filter((p) => p.socketId !== socketId)
+      .map((p) => p.socketId);
+
     return {
       ok: true,
-      code,
+      code: normalizedCode,
+      room,
+      player,
+      players: room.players.map(playerToAssignment),
       opponentSocketIds,
+      update: buildUpdate(room),
     };
   }
 
@@ -287,5 +380,7 @@ export function createRoomStore({ generateCode = defaultGenerateCode, random = M
     makeMove,
     requestRematch,
     disconnect,
+    leaveRoom,
+    rejoinRoom,
   };
 }
